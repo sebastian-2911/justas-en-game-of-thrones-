@@ -23,6 +23,15 @@ if(${QT_VERSION_MAJOR} GREATER_EQUAL 6)
     qt_add_executable(untitled
         MANUAL_FINALIZATION
         ${PROJECT_SOURCES}
+        core.h core.cpp
+        entidad.h entidad.cpp
+        game.h game.cpp
+        graficos.h graficos.cpp
+        ia.h ia.cpp
+        jugador.h jugador.cpp
+        nivel.h nivel.cpp
+        nivel1.h nivel1.cpp
+        obstaculo.h obstaculo.cpp
     )
 # Define target properties for Android with Qt 6 as:
 #    set_property(TARGET untitled APPEND PROPERTY QT_ANDROID_PACKAGE_SOURCE_DIR
