@@ -22,6 +22,11 @@ Graficos::Graficos(QWidget* parent)
 
     cargarFondo();
 
+    musicaMenu.setSource(QUrl("qrc:/musica-menu.wav"));
+    musicaMenu.setLoopCount(QSoundEffect::Infinite);
+    musicaMenu.setVolume(0.5f);
+    musicaMenu.play();
+
     connect(timer, &QTimer::timeout, this, &Graficos::loop);
     timer->start(16);
 
@@ -37,7 +42,7 @@ void Graficos::cargarFondo()
 {
     QPixmap original;
 
-    if (!original.load("fondo.jpeg"))
+    if (!original.load(":/fondo.jpeg"))
     {
         fondoCargado = false;
         return;
@@ -74,11 +79,19 @@ void Graficos::cargarFondo()
 
     fondo = QPixmap::fromImage(img);
     fondoCargado = true;
+
+    fondoMenu = QPixmap(":/menu-1.jpeg").scaled(
+        1024,//x
+        668,//y
+        Qt::IgnoreAspectRatio,
+        Qt::SmoothTransformation
+        );
 }
 
 void Graficos::iniciarNivel1(Nivel1::Dificultad dificultad)
 {
-    // crear nivel
+    musicaMenu.stop();
+
     delete nivel;
 
     nivel = new Nivel1(dificultad);
@@ -105,17 +118,17 @@ void Graficos::iniciarNivel2()
 
 void Graficos::volverAlMenu()
 {
-    // reiniciar juego
     delete nivel;
 
     nivel = nullptr;
     scrollMundo = 0.0f;
     menuActivo = true;
+
+    musicaMenu.play();
 }
 
 void Graficos::loop()
 {
-    // esperar menu
     if (menuActivo)
     {
         update();
@@ -148,6 +161,12 @@ void Graficos::paintEvent(QPaintEvent*)
 {
     QPainter painter(this);
 
+    if (menuActivo)
+    {
+        dibujarMenu(painter);
+        return;
+    }
+
     if (fondoCargado)
     {
         int h = fondo.height();
@@ -157,38 +176,22 @@ void Graficos::paintEvent(QPaintEvent*)
         painter.drawPixmap(0, fondoY, fondo);
     }
 
-    if (menuActivo)
-    {
-        dibujarMenu(painter);
-        return;
-    }
-
     if (nivel)
         nivel->renderizar(painter);
 }
 
 void Graficos::dibujarMenu(QPainter& painter)
 {
-    // botones
-    botonNormal = QRect(362, 310, 300, 60);
-    botonDificil = QRect(362, 390, 300, 60);
+    painter.drawPixmap(0, 0, fondoMenu);
 
-    painter.setPen(Qt::white);
-    painter.setFont(QFont("Arial", 34, QFont::Bold));
-    painter.drawText(270, 220, "Batalla del Tridente");
+    botonNormal = QRect(362, 310, 300, 70);
+    botonDificil = QRect(362, 420, 300, 70);
 
-    painter.setFont(QFont("Arial", 20, QFont::Bold));
-    painter.drawText(365, 275, "Selecciona dificultad");
-
-    painter.setBrush(Qt::darkGray);
+    painter.setBrush(Qt::transparent);
+    painter.setPen(Qt::NoPen);
     painter.drawRect(botonNormal);
     painter.drawRect(botonDificil);
-
-    painter.setPen(Qt::white);
-    painter.drawText(460, 350, "NORMAL");
-    painter.drawText(460, 430, "DIFICIL");
 }
-
 void Graficos::keyPressEvent(QKeyEvent* event)
 {
     if (menuActivo || !nivel)
@@ -196,7 +199,6 @@ void Graficos::keyPressEvent(QKeyEvent* event)
 
     Nivel2* nivel2 = dynamic_cast<Nivel2*>(nivel);
 
-    // NIVEL 2
     if (nivel2)
     {
         if (event->key() == Qt::Key_A)
@@ -208,7 +210,6 @@ void Graficos::keyPressEvent(QKeyEvent* event)
         return;
     }
 
-    // NIVEL 1
     Jugador* j = nivel->getJugador();
 
     if (!j)
@@ -226,7 +227,6 @@ void Graficos::mousePressEvent(QMouseEvent* event)
     int x = event->position().x();
     int y = event->position().y();
 
-    // seleccionar dificultad
     if (menuActivo)
     {
         if (botonNormal.contains(x, y))
@@ -241,8 +241,5 @@ void Graficos::mousePressEvent(QMouseEvent* event)
     if (!nivel)
         return;
 
-    nivel->manejarClick(
-        x,
-        y
-        );
+    nivel->manejarClick(x, y);
 }

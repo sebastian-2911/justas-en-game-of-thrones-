@@ -1,5 +1,9 @@
 <RCC>
-    <qresource prefix="/new/prefix1">
-        <file>build/Desktop_Qt_6_10_2_MinGW_64_bit-Debug/fondo.jpeg</file>
+    <qresource prefix="/new/prefix1"/>
+    <qresource prefix="/">
+        <file>fondo.jpeg</file>
+        <file>robert nivel1.png</file>
+        <file>musica-menu.wav</file>
+        <file>menu-1.jpeg</file>
     </qresource>
 </RCC>
