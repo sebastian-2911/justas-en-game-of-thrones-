@@ -1,0 +1,5 @@
+<RCC>
+    <qresource prefix="/new/prefix1">
+        <file>build/Desktop_Qt_6_10_2_MinGW_64_bit-Debug/fondo.jpeg</file>
+    </qresource>
+</RCC>
