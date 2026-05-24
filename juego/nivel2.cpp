@@ -9,7 +9,7 @@ Nivel2::Nivel2()
     fondoCargado = false;
     pisoCargado = false;
 
-    velocidadJugador = 12.0f;
+    velocidadJugador = 19.0f;
 
     limiteIzquierdo = 80.0f;
     limiteDerecho = 900.0f;
@@ -32,8 +32,7 @@ void Nivel2::iniciar()
 
     jugador->setPosicion(200.0f, 0.0f, 0.0f);
 
-    fondoCargado = fondo.load("campo_batalla.png");
-
+    fondoCargado = fondo.load(":/fondo-nevel2.png");
     pisoCargado = piso.load("piso.png");
 
     finNivel = false;

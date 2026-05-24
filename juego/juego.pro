@@ -1,5 +1,4 @@
-QT += widgets multimedia
-
+QT += widgets multimedia multimediawidgets
 CONFIG += c++17
 
 # You can make your code fail to compile if it uses deprecated APIs.

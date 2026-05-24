@@ -3,12 +3,13 @@
 #include "nivel1.h"
 #include "nivel2.h"
 
+#include <QAudioOutput>
 #include <QKeyEvent>
 #include <QMouseEvent>
 #include <QPainter>
 #include <cmath>
 
-float scrollMundo = 0.0f;
+float scrollMundo    = 0.0f;
 float velocidadMundo = 400.0f;
 
 Graficos::Graficos(QWidget* parent)
@@ -16,7 +17,10 @@ Graficos::Graficos(QWidget* parent)
     nivel(nullptr),
     timer(new QTimer(this)),
     fondoCargado(false),
-    menuActivo(true)
+    menuActivo(true),
+    reproduciendo(false),
+    mediaPlayer(nullptr),
+    videoWidget(nullptr)
 {
     setFixedSize(1024, 768);
 
@@ -36,7 +40,18 @@ Graficos::Graficos(QWidget* parent)
 Graficos::~Graficos()
 {
     delete nivel;
+
+    if (mediaPlayer)
+    {
+        mediaPlayer->stop();
+        delete mediaPlayer;
+    }
+
+    if (videoWidget)
+        delete videoWidget;
 }
+
+// ── fondo ─────────────────────────────────────────────────────────────────────
 
 void Graficos::cargarFondo()
 {
@@ -56,8 +71,8 @@ void Graficos::cargarFondo()
         );
 
     QImage img = escalado.toImage();
-    int w = img.width();
-    int h = img.height();
+    int w    = img.width();
+    int h    = img.height();
     int zona = 150;
 
     for (int y = 0; y < zona; y++)
@@ -69,24 +84,26 @@ void Graficos::cargarFondo()
             QColor colorTop = img.pixelColor(x, y);
             QColor colorBot = img.pixelColor(x, h - zona + y);
 
-            int r = colorBot.red() * (1 - alpha) + colorTop.red() * alpha;
+            int r = colorBot.red()   * (1 - alpha) + colorTop.red()   * alpha;
             int g = colorBot.green() * (1 - alpha) + colorTop.green() * alpha;
-            int b = colorBot.blue() * (1 - alpha) + colorTop.blue() * alpha;
+            int b = colorBot.blue()  * (1 - alpha) + colorTop.blue()  * alpha;
 
             img.setPixelColor(x, y, QColor(r, g, b));
         }
     }
 
-    fondo = QPixmap::fromImage(img);
+    fondo        = QPixmap::fromImage(img);
     fondoCargado = true;
 
     fondoMenu = QPixmap(":/menu-1.jpeg").scaled(
-        1024,//x
-        668,//y
+        1024,
+        668,
         Qt::IgnoreAspectRatio,
         Qt::SmoothTransformation
         );
 }
+
+// ── nivel 1 ───────────────────────────────────────────────────────────────────
 
 void Graficos::iniciarNivel1(Nivel1::Dificultad dificultad)
 {
@@ -97,39 +114,111 @@ void Graficos::iniciarNivel1(Nivel1::Dificultad dificultad)
     nivel = new Nivel1(dificultad);
     nivel->iniciar();
 
-    scrollMundo = 0.0f;
+    scrollMundo    = 0.0f;
     velocidadMundo = nivel->getVelocidadMundo();
 
     menuActivo = false;
 }
 
+// ── cutscene + nivel 2 ────────────────────────────────────────────────────────
+
 void Graficos::iniciarNivel2()
+{
+    reproducirCutscene();
+}
+
+void Graficos::reproducirCutscene()
+{
+    reproduciendo = true;
+    timer->stop();
+
+    setStyleSheet("background-color: black;");
+
+    videoWidget = new QVideoWidget(this);
+    videoWidget->setGeometry(0, 0, 1024, 668);
+    videoWidget->show();
+    videoWidget->raise();
+
+    mediaPlayer = new QMediaPlayer(this);
+
+    QAudioOutput* audioOutput = new QAudioOutput(this);
+    audioOutput->setVolume(1.0f);
+    mediaPlayer->setAudioOutput(audioOutput);
+
+    mediaPlayer->setVideoOutput(videoWidget);
+    mediaPlayer->setSource(QUrl("qrc:/video nivel1.mp4"));
+
+    connect(
+        mediaPlayer,
+        &QMediaPlayer::playbackStateChanged,
+        this,
+        &Graficos::onVideoTerminado
+        );
+
+    mediaPlayer->play();
+}
+
+void Graficos::onVideoTerminado(QMediaPlayer::PlaybackState state)
+{
+    if (state != QMediaPlayer::StoppedState)
+        return;
+
+    if (videoWidget)
+    {
+        videoWidget->hide();
+        videoWidget->deleteLater();
+        videoWidget = nullptr;
+    }
+
+    if (mediaPlayer)
+    {
+        mediaPlayer->deleteLater();
+        mediaPlayer = nullptr;
+    }
+
+    setStyleSheet("background-color: black;");
+
+
+    QTimer::singleShot(3000, this, [this]()
+                       {
+                           setStyleSheet("");
+                           reproduciendo = false;
+                           iniciarNivel2Real();
+                       });
+}
+void Graficos::iniciarNivel2Real()
 {
     delete nivel;
 
     nivel = new Nivel2();
     nivel->iniciar();
 
-    scrollMundo = 0.0f;
+    scrollMundo    = 0.0f;
     velocidadMundo = nivel->getVelocidadMundo();
 
     menuActivo = false;
+
+    timer->start(16);
 }
+
+// ── menú ──────────────────────────────────────────────────────────────────────
 
 void Graficos::volverAlMenu()
 {
     delete nivel;
 
-    nivel = nullptr;
-    scrollMundo = 0.0f;
-    menuActivo = true;
+    nivel        = nullptr;
+    scrollMundo  = 0.0f;
+    menuActivo   = true;
 
     musicaMenu.play();
 }
 
+// ── game loop ─────────────────────────────────────────────────────────────────
+
 void Graficos::loop()
 {
-    if (menuActivo)
+    if (menuActivo || reproduciendo)
     {
         update();
         return;
@@ -139,7 +228,6 @@ void Graficos::loop()
     scrollMundo += velocidadMundo * dt;
 
     nivel->configurarMovimiento(dt, scrollMundo);
-
     nivel->actualizar();
 
     if (nivel->pidioSiguienteNivel())
@@ -157,6 +245,8 @@ void Graficos::loop()
     update();
 }
 
+// ── pintado ───────────────────────────────────────────────────────────────────
+
 void Graficos::paintEvent(QPaintEvent*)
 {
     QPainter painter(this);
@@ -167,13 +257,16 @@ void Graficos::paintEvent(QPaintEvent*)
         return;
     }
 
+    if (reproduciendo)
+        return; // QVideoWidget pinta el video
+
     if (fondoCargado)
     {
-        int h = fondo.height();
+        int h      = fondo.height();
         int fondoY = static_cast<int>(std::fmod(scrollMundo, static_cast<float>(h)));
 
         painter.drawPixmap(0, fondoY - h, fondo);
-        painter.drawPixmap(0, fondoY, fondo);
+        painter.drawPixmap(0, fondoY,     fondo);
     }
 
     if (nivel)
@@ -184,7 +277,7 @@ void Graficos::dibujarMenu(QPainter& painter)
 {
     painter.drawPixmap(0, 0, fondoMenu);
 
-    botonNormal = QRect(362, 310, 300, 70);
+    botonNormal  = QRect(362, 310, 300, 70);
     botonDificil = QRect(362, 420, 300, 70);
 
     painter.setBrush(Qt::transparent);
@@ -192,8 +285,19 @@ void Graficos::dibujarMenu(QPainter& painter)
     painter.drawRect(botonNormal);
     painter.drawRect(botonDificil);
 }
+
+// ── input ─────────────────────────────────────────────────────────────────────
+
 void Graficos::keyPressEvent(QKeyEvent* event)
 {
+    if (reproduciendo)
+    {
+        if (event->key() == Qt::Key_Escape && mediaPlayer)
+            mediaPlayer->stop();
+
+        return;
+    }
+
     if (menuActivo || !nivel)
         return;
 
