@@ -7,7 +7,6 @@ CONFIG += c++17
 
 SOURCES += \
     entidad.cpp \
-    graficos.cpp \
     ia.cpp \
     juego.cpp \
     jugador.cpp \
@@ -20,7 +19,6 @@ SOURCES += \
 
 HEADERS += \
     entidad.h \
-    graficos.h \
     ia.h \
     juego.h \
     jugador.h \

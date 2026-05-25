@@ -3,59 +3,82 @@
 
 #include "nivel.h"
 #include "jugador.h"
-
-#include <QPainter>
 #include <QPixmap>
+#include <QPainter>
 
 class Nivel2 : public Nivel
 {
 public:
-
     Nivel2();
-    ~Nivel2() override;
+    ~Nivel2();
 
-    void iniciar() override;
+    // Nivel (overrides)
+    void  iniciar()                                  override;
+    void  actualizar()                               override;
+    void  renderizar(QPainter& painter)              override;
+    bool  terminado()                                override;
+    void  configurarMovimiento(float dt, float scroll) override;
+    float getVelocidadMundo()                  const override;
+    void  manejarClick(int x, int y)                 override;
+    bool  pidioReinicio()                      const override;
+    bool  pidioSiguienteNivel()                const override;
+    Jugador* getJugador()                            override;
 
-    void actualizar() override;
+    // jugadores
+    Jugador* getJugador1();
+    Jugador* getJugador2();
 
-    void renderizar(QPainter& painter) override;
-
-    bool terminado() override;
-
-    Jugador* getJugador() override;
-
+    // controles jugador
     void moverJugadorIzquierda();
-
     void moverJugadorDerecha();
+    void saltoJugador();
+    void ataqueJugador();
+    void bloqueoJugador(bool activo);
+
+    // colisión
+    bool hayColision();
+
+    // fondos
+    bool    isFondoCargado() const;
+    bool    isPisoCargado()  const;
+    QPixmap getFondo()       const;
+    QPixmap getPiso()        const;
 
 private:
+    //  jugadores
+    Jugador* jugador1;
+    Jugador* jugador2;
 
-    Jugador* jugador;
-
+    // fondos
     QPixmap fondo;
     QPixmap piso;
+    bool    fondoCargado;
+    bool    pisoCargado;
 
-    bool fondoCargado;
-    bool pisoCargado;
-
-    float velocidadJugador;
-
+    // estado
+    bool  finNivel;
+    float dt;
+    float tiempoEscudo;
     float limiteIzquierdo;
     float limiteDerecho;
-    void configurarMovimiento(
-        float dt,
-        float scroll
-        ) override;
 
-    float getVelocidadMundo() const override;
+    //  física
+    float velY1;
+    float velY2;
+    bool  enSuelo1;
+    bool  enSuelo2;
 
-    void manejarClick(int x, int y) override;
+    // combate
+    bool  bloqueando1;
+    float cooldownAtaque1;
+    float cooldownAtaque2;
 
-    bool pidioReinicio() const override;
-
-    bool pidioSiguienteNivel() const override;
-
-    bool finNivel;
+    //  helpers privados
+    void actualizarIA();
+    void limitarJugador(Jugador* j);
+    void aplicarGravedad(Jugador* j, float& velY, bool& enSuelo);
+    void aplicarDanioDirecto(Jugador* objetivo);
+    void aplicarDanio(Jugador* atacante, Jugador* defensor, bool bloqueando);
 };
 
-#endif
+#endif // NIVEL2_H
