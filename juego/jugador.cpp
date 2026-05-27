@@ -91,7 +91,7 @@ void Jugador::actualizarNivel2(float dt)
     }
 }
 
-// ── renderizar ────────────────────────────────────────────────────────────────
+// ── renderizar
 
 void Jugador::renderizar(QPainter& painter)
 {
@@ -152,7 +152,7 @@ void Jugador::moverDerecha()
     if (carril < 2) carril++;
 }
 
-// ── movimiento nivel 2 ────────────────────────────────────────────────────────
+// ── movimiento nivel 2
 
 void Jugador::moverIzquierdaLibre()
 {
@@ -173,7 +173,7 @@ void Jugador::saltar()
     }
 }
 
-// ── combate ───────────────────────────────────────────────────────────────────
+// ── combate
 
 void Jugador::atacar(Jugador* enemigo)
 {
@@ -211,7 +211,7 @@ bool Jugador::colisiona(Jugador* otro)
     return r1.intersects(r2);
 }
 
-// ── getters / setters ─────────────────────────────────────────────────────────
+// ── getters / setters
 
 float Jugador::getVida() const
 {

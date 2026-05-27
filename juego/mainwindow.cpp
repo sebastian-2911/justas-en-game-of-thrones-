@@ -56,8 +56,6 @@ MainWindow::~MainWindow()
         delete videoWidget;
 }
 
-// ── fondo ─────────────────────────────────────────────────────────────────────
-
 void MainWindow::cargarFondo()
 {
     QPixmap original;
@@ -106,8 +104,6 @@ void MainWindow::cargarFondo()
         );
 }
 
-// ── nivel 1 ───────────────────────────────────────────────────────────────────
-
 void MainWindow::iniciarNivel1(Nivel1::Dificultad dificultad)
 {
     musicaMenu.stop();
@@ -121,8 +117,6 @@ void MainWindow::iniciarNivel1(Nivel1::Dificultad dificultad)
 
     menuActivo = false;
 }
-
-// ── cutscene + nivel 2 ────────────────────────────────────────────────────────
 
 void MainWindow::iniciarNivel2()
 {
@@ -203,8 +197,6 @@ void MainWindow::iniciarNivel2Real()
     timer->start(16);
 }
 
-// ── menú ──────────────────────────────────────────────────────────────────────
-
 void MainWindow::volverAlMenu()
 {
     delete nivel;
@@ -215,8 +207,6 @@ void MainWindow::volverAlMenu()
 
     musicaMenu.play();
 }
-
-// ── game loop ─────────────────────────────────────────────────────────────────
 
 void MainWindow::loop()
 {
@@ -247,8 +237,6 @@ void MainWindow::loop()
     update();
 }
 
-// ── renderizar nivel 2 ────────────────────────────────────────────────────────
-
 void MainWindow::renderizarNivel2(QPainter& painter)
 {
     Nivel2* nivel2 = dynamic_cast<Nivel2*>(nivel);
@@ -260,11 +248,9 @@ void MainWindow::renderizarNivel2(QPainter& painter)
     if (nivel2->isPisoCargado())
         painter.drawPixmap(0, 550, 1024, 220, nivel2->getPiso());
 
-    // ── declaración única de j1 y j2 ─────────────────────────────────────────
     Jugador* j1 = nivel2->getJugador1();
     Jugador* j2 = nivel2->getJugador2();
 
-    // ── dibujar jugadores ─────────────────────────────────────────────────────
     painter.setPen(Qt::NoPen);
 
     if (j1)
@@ -272,7 +258,6 @@ void MainWindow::renderizarNivel2(QPainter& painter)
         Vector3 pos = j1->getPosicion();
         int screenX = static_cast<int>(pos.x);
         int screenY = 450 + static_cast<int>(pos.y);
-
         painter.setBrush(Qt::blue);
         painter.drawRect(screenX, screenY, 60, 100);
     }
@@ -282,10 +267,14 @@ void MainWindow::renderizarNivel2(QPainter& painter)
         Vector3 pos = j2->getPosicion();
         int screenX = static_cast<int>(pos.x);
         int screenY = 450 + static_cast<int>(pos.y);
-
         painter.setBrush(Qt::red);
         painter.drawRect(screenX, screenY, 60, 100);
     }
+
+    // ── dibujar flechas ───────────────────────────────────────────────────────
+    painter.setPen(Qt::NoPen);
+    for (auto* f : nivel2->getFlechas())
+        f->renderizar(painter);
 
     // ── mensaje fin de nivel ──────────────────────────────────────────────────
     if (nivel2->terminado())
@@ -299,7 +288,7 @@ void MainWindow::renderizarNivel2(QPainter& painter)
             painter.drawText(300, 200, "GANASTE");
     }
 
-    // ── barras HUD superiores ─────────────────────────────────────────────────
+    // ── barras HUD ────────────────────────────────────────────────────────────
     const int BARRA_W  = 380;
     const int BARRA_H  = 16;
     const int BARRA_Y1 = 20;
@@ -308,7 +297,6 @@ void MainWindow::renderizarNivel2(QPainter& painter)
 
     painter.setPen(Qt::NoPen);
 
-    // --- jugador 1 (izquierda) ---
     if (j1)
     {
         painter.setBrush(QColor(60, 60, 60));
@@ -329,7 +317,6 @@ void MainWindow::renderizarNivel2(QPainter& painter)
         painter.setPen(Qt::NoPen);
     }
 
-    // --- jugador 2 / IA (derecha) ---
     if (j2)
     {
         int xDerecha = 1024 - MARGEN - BARRA_W;
@@ -355,8 +342,6 @@ void MainWindow::renderizarNivel2(QPainter& painter)
         painter.setPen(Qt::NoPen);
     }
 }
-
-// ── pintado ───────────────────────────────────────────────────────────────────
 
 void MainWindow::paintEvent(QPaintEvent*)
 {
@@ -404,8 +389,6 @@ void MainWindow::dibujarMenu(QPainter& painter)
     painter.drawRect(botonDificil);
 }
 
-// ── input ─────────────────────────────────────────────────────────────────────
-
 void MainWindow::keyPressEvent(QKeyEvent* event)
 {
     if (reproduciendo)
@@ -422,29 +405,24 @@ void MainWindow::keyPressEvent(QKeyEvent* event)
 
     if (nivel2)
     {
-        // ── movimiento ────────────────────────────────────────────────────────
         if (event->key() == Qt::Key_A)
             nivel2->moverJugadorIzquierda();
 
         if (event->key() == Qt::Key_D)
             nivel2->moverJugadorDerecha();
 
-        // ── salto con W ───────────────────────────────────────────────────────
         if (event->key() == Qt::Key_W)
             nivel2->saltoJugador();
 
-        // ── ataque con Z ──────────────────────────────────────────────────────
         if (event->key() == Qt::Key_Z)
             nivel2->ataqueJugador();
 
-        // ── bloqueo con X (mantener presionado) ───────────────────────────────
         if (event->key() == Qt::Key_X)
             nivel2->bloqueoJugador(true);
 
         return;
     }
 
-    // nivel 1
     Jugador* j = nivel->getJugador();
     if (!j) return;
 
@@ -462,7 +440,6 @@ void MainWindow::keyReleaseEvent(QKeyEvent* event)
     Nivel2* nivel2 = dynamic_cast<Nivel2*>(nivel);
     if (!nivel2) return;
 
-    // Soltar X desactiva el bloqueo
     if (event->key() == Qt::Key_X)
         nivel2->bloqueoJugador(false);
 }
