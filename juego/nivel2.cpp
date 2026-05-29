@@ -1,18 +1,27 @@
 #include "nivel2.h"
 
-// constantes de fisica
+// ── Constantes de física
 static const float GRAVEDAD        = 1800.0f;
-static const float FUERZA_SALTO    = -700.0f;
 static const float SUELO_Y         = 0.0f;
-static const float VELOCIDAD_MOV   = 300.0f;
 
-// constantes de combate
+// ── Constantes de combate
 static const float DANIO_ESCUDO    = 25.0f;
 static const float DANIO_VIDA      = 30.0f;
 static const float ESCUDO_MAX      = 100.0f;
-static const float COOLDOWN_ATAQUE = 0.5f;
 
-// constructor
+static const float COOLDOWN_ATAQUE_ROBERT  = 0.40f;
+static const float COOLDOWN_ATAQUE_RHAEGAR = 0.28f;
+
+static const float VIDA_ROBERT   = 130.0f;
+static const float VIDA_RHAEGAR  =  85.0f;
+
+
+static const float TIEMPO_HUIDA   = 0.5f;
+static const float DIST_HUIDA     = 120.0f;
+
+
+// Constructor
+
 Nivel2::Nivel2()
 {
     jugador1        = nullptr;
@@ -30,15 +39,23 @@ Nivel2::Nivel2()
     velY2    = 0.0f;
     enSuelo2 = true;
 
+    velEmpuje1 = 0.0f;
+    velEmpuje2 = 0.0f;
+
     bloqueando1     = false;
     cooldownAtaque1 = 0.0f;
     cooldownAtaque2 = 0.0f;
 
-    tiempoSiguienteOleada = 10.0f + static_cast<float>(
-                                QRandomGenerator::global()->bounded(11));
+    timerPostAtaqueRobert = 0.0f;
+    robertAcabaDeAtacar   = false;
+
+    tiempoSiguienteOleada = 6.0f + static_cast<float>(
+                                QRandomGenerator::global()->bounded(3));
 }
 
-// destructor
+
+// Destructor
+
 Nivel2::~Nivel2()
 {
     delete jugador1;
@@ -48,7 +65,7 @@ Nivel2::~Nivel2()
     flechas.clear();
 }
 
-// iniciar
+//iniciar
 void Nivel2::iniciar()
 {
     delete jugador1;
@@ -57,26 +74,36 @@ void Nivel2::iniciar()
     jugador1 = new Jugador(JUGADOR_NIVEL2);
     jugador2 = new Jugador(JUGADOR_NIVEL2);
 
+    jugador1->setVida(VIDA_ROBERT);
+    jugador2->setVida(VIDA_RHAEGAR);
+
     jugador1->setPosicion(200.0f, 0.0f, 0.0f);
     jugador2->setPosicion(700.0f, 0.0f, 0.0f);
 
     fondoCargado = fondo.load(":/fondo-nevel2.png");
     pisoCargado  = piso.load(":/piso.png");
 
-    finNivel        = false;
-    velY1           = 0.0f;
-    enSuelo1        = true;
-    velY2           = 0.0f;
-    enSuelo2        = true;
+    finNivel   = false;
+    velY1      = 0.0f;
+    enSuelo1   = true;
+    velY2      = 0.0f;
+    enSuelo2   = true;
+
+    velEmpuje1 = 0.0f;
+    velEmpuje2 = 0.0f;
+
     bloqueando1     = false;
     cooldownAtaque1 = 0.0f;
     cooldownAtaque2 = 0.0f;
 
+    timerPostAtaqueRobert = 0.0f;
+    robertAcabaDeAtacar   = false;
+
     for (auto* f : flechas) delete f;
     flechas.clear();
 
-    tiempoSiguienteOleada = 10.0f + static_cast<float>(
-                                QRandomGenerator::global()->bounded(11));
+    tiempoSiguienteOleada = 6.0f + static_cast<float>(
+                                QRandomGenerator::global()->bounded(3));
 }
 
 // actualizar
@@ -90,14 +117,41 @@ void Nivel2::actualizar()
     aplicarGravedad(jugador1, velY1, enSuelo1);
     aplicarGravedad(jugador2, velY2, enSuelo2);
 
+    aplicarFriccionEmpuje();
+
+    // ── Detectar patrón  de Robert ─────────────────────────────
+    // Si Robert atacó recientemente y ahora está lejos, notificar a la IA
+    if (timerPostAtaqueRobert > 0.0f)
+    {
+        timerPostAtaqueRobert -= dt;
+        if (robertAcabaDeAtacar)
+        {
+            Vector3 p1 = jugador1->getPosicion();
+            Vector3 p2 = jugador2->getPosicion();
+            float dist = p1.x - p2.x;
+            if (dist < 0.0f) dist = -dist;
+            if (dist > DIST_HUIDA)
+            {
+                ia.notificarPatronHitAndRun();
+                robertAcabaDeAtacar = false;
+            }
+        }
+    }
+    else
+    {
+        robertAcabaDeAtacar = false;
+    }
+
+    //  IA
+    ia.notificarBloqueoRobert(bloqueando1);
     actualizarIA();
 
     limitarJugador(jugador1);
     limitarJugador(jugador2);
 
-    // regenerar escudo cada 20
+    // ── Regenerar escudo cada 15 s
     tiempoEscudo += dt;
-    if (tiempoEscudo >= 20.0f)
+    if (tiempoEscudo >= 15.0f)
     {
         tiempoEscudo = 0.0f;
         float e1 = jugador1->getEscudo() + 20.0f;
@@ -106,24 +160,49 @@ void Nivel2::actualizar()
         jugador2->setEscudo(e2 > ESCUDO_MAX ? ESCUDO_MAX : e2);
     }
 
-    // oleadas de flechas
+    // Oleadas de flechas
     tiempoSiguienteOleada -= dt;
     if (tiempoSiguienteOleada <= 0.0f)
     {
         generarOleadaFlechas();
-        tiempoSiguienteOleada = 10.0f + static_cast<float>(
-                                    QRandomGenerator::global()->bounded(11));
+        tiempoSiguienteOleada = 6.0f + static_cast<float>(
+                                    QRandomGenerator::global()->bounded(3));
     }
 
     actualizarFlechas();
     comprobarColisionesFlechas();
 
-    // fin de nivel
     if (jugador1->getVida() <= 0.0f || jugador2->getVida() <= 0.0f)
         finNivel = true;
 }
 
-// fisica: gravedad + suelo
+// aplicarFriccionEmpuje
+
+void Nivel2::aplicarFriccionEmpuje()
+{
+    float factor = 1.0f - FRICCION_EMPUJE * dt;
+    if (factor < 0.0f) factor = 0.0f;
+
+    velEmpuje1 *= factor;
+    velEmpuje2 *= factor;
+
+    if (jugador1)
+    {
+        Vector3 p = jugador1->getPosicion();
+        p.x += velEmpuje1 * dt;
+        jugador1->setPosicion(p.x, p.y, p.z);
+    }
+    if (jugador2)
+    {
+        Vector3 p = jugador2->getPosicion();
+        p.x += velEmpuje2 * dt;
+        jugador2->setPosicion(p.x, p.y, p.z);
+    }
+}
+
+
+// Física: gravedad + suelo
+
 void Nivel2::aplicarGravedad(Jugador* j, float& velY, bool& enSuelo)
 {
     Vector3 pos = j->getPosicion();
@@ -145,13 +224,15 @@ void Nivel2::aplicarGravedad(Jugador* j, float& velY, bool& enSuelo)
     j->setPosicion(pos.x, pos.y, pos.z);
 }
 
-// renderizar (MainWindow lo hace)
+
+// renderizar
+
 void Nivel2::renderizar(QPainter& painter)
 {
     (void)painter;
 }
 
-// combate
+// Combate
 bool Nivel2::hayColision()
 {
     if (!jugador1 || !jugador2) return false;
@@ -167,14 +248,28 @@ bool Nivel2::hayColision()
     return (l1 < r2 && r1 > l2 && t1 < b2 && b1 > t2);
 }
 
+// ataqueJugador  (Robert ataca)
 void Nivel2::ataqueJugador()
 {
     if (!jugador1 || !jugador2)  return;
     if (cooldownAtaque1 > 0.0f)  return;
     if (!hayColision())           return;
 
-    cooldownAtaque1 = COOLDOWN_ATAQUE;
+    cooldownAtaque1 = COOLDOWN_ATAQUE_ROBERT;
     aplicarDanioDirecto(jugador2);
+
+    // Notificar golpe a la IA y armar detector
+    ia.notificarGolpeRecibido();
+    robertAcabaDeAtacar   = true;
+    timerPostAtaqueRobert = TIEMPO_HUIDA;
+
+    Vector3 p1 = jugador1->getPosicion();
+    Vector3 p2 = jugador2->getPosicion();
+    float dir       = (p2.x >= p1.x) ? 1.0f : -1.0f;
+    float masaTotal = MASA_ROBERT + MASA_RHAEGAR;
+
+    velEmpuje2 +=  dir * FUERZA_EMPUJE * (MASA_ROBERT  / masaTotal);
+    velEmpuje1 += -dir * FUERZA_EMPUJE * (MASA_RHAEGAR / masaTotal);
 }
 
 void Nivel2::aplicarDanioDirecto(Jugador* objetivo)
@@ -198,18 +293,28 @@ void Nivel2::bloqueoJugador(bool activo)
     bloqueando1 = activo;
 }
 
-// IA
+
+// actualizarIA
+
 void Nivel2::actualizarIA()
 {
     if (!jugador1 || !jugador2) return;
+
+    ia.actualizar(jugador2, jugador1,
+                  velY2, enSuelo2,
+                  velEmpuje2, velEmpuje1,
+                  cooldownAtaque2, dt);
+
+    (void)ia.quiereBloquear();   // MainWindow puede consultarlo para animación
 }
 
-// movimiento jugador
+// Movimiento de Robert
+
 void Nivel2::moverJugadorIzquierda()
 {
     if (!jugador1) return;
     Vector3 pos = jugador1->getPosicion();
-    pos.x -= VELOCIDAD_MOV * dt;
+    pos.x -= VEL_ROBERT * dt;
     jugador1->setPosicion(pos.x, pos.y, pos.z);
 }
 
@@ -217,42 +322,40 @@ void Nivel2::moverJugadorDerecha()
 {
     if (!jugador1) return;
     Vector3 pos = jugador1->getPosicion();
-    pos.x += VELOCIDAD_MOV * dt;
+    pos.x += VEL_ROBERT * dt;
     jugador1->setPosicion(pos.x, pos.y, pos.z);
 }
 
 void Nivel2::saltoJugador()
 {
     if (!jugador1 || !enSuelo1) return;
-    velY1    = FUERZA_SALTO;
+    velY1    = FUERZA_SALTO_ROBERT;
     enSuelo1 = false;
 }
 
-// flechas: generar oleada
+
+// Flechas
+
 void Nivel2::generarOleadaFlechas()
 {
     int cantidad = 1 + static_cast<int>(
-                       QRandomGenerator::global()->bounded(3)); // 1, 2 o 3
+                       QRandomGenerator::global()->bounded(3));
 
     for (int i = 0; i < cantidad; i++)
     {
         float x = limiteIzquierdo + static_cast<float>(
                       QRandomGenerator::global()->bounded(
                           static_cast<int>(limiteDerecho - limiteIzquierdo)));
-
-        float y = -30.0f; // fuera de pantalla arriba
-
+        float y  = -30.0f;
         float vx = static_cast<float>(
-                       QRandomGenerator::global()->bounded(200)) - 100.0f; // -100..+100
-
+                       QRandomGenerator::global()->bounded(200)) - 100.0f;
         float vy = 100.0f + static_cast<float>(
-                       QRandomGenerator::global()->bounded(151)); // 100..250
+                       QRandomGenerator::global()->bounded(151));
 
         flechas.push_back(new Obstaculo(x, y, vx, vy, true));
     }
 }
 
-// flechas: actualizar posicion y limpiar
 void Nivel2::actualizarFlechas()
 {
     for (auto* f : flechas)
@@ -266,14 +369,10 @@ void Nivel2::actualizarFlechas()
             delete *it;
             it = flechas.erase(it);
         }
-        else
-        {
-            ++it;
-        }
+        else { ++it; }
     }
 }
 
-// flechas: colisiones con jugadores
 void Nivel2::comprobarColisionesFlechas()
 {
     for (auto* f : flechas)
@@ -282,45 +381,35 @@ void Nivel2::comprobarColisionesFlechas()
 
         QRect rf = f->getRect();
 
-        // colision con jugador1
         if (jugador1)
         {
             Vector3 p1 = jugador1->getPosicion();
-            QRect rj1(
-                static_cast<int>(p1.x),
-                450 + static_cast<int>(p1.y),
-                60, 100);
-
+            QRect rj1(static_cast<int>(p1.x), 450 + static_cast<int>(p1.y), 60, 100);
             if (rf.intersects(rj1))
             {
-                float escudo = jugador1->getEscudo();
-                if (escudo > 0.0f)
-                    jugador1->setEscudo(escudo - DANIO_FLECHA < 0.0f ? 0.0f : escudo - DANIO_FLECHA);
+                float esc = jugador1->getEscudo();
+                if (esc > 0.0f)
+                    jugador1->setEscudo(esc - DANIO_FLECHA < 0.0f ? 0.0f : esc - DANIO_FLECHA);
                 else
-                    jugador1->setVida(jugador1->getVida() - DANIO_FLECHA < 0.0f ? 0.0f : jugador1->getVida() - DANIO_FLECHA);
-
+                    jugador1->setVida(jugador1->getVida() - DANIO_FLECHA < 0.0f
+                                          ? 0.0f : jugador1->getVida() - DANIO_FLECHA);
                 f->desactivar();
                 continue;
             }
         }
 
-        // colision con jugador2
         if (jugador2)
         {
             Vector3 p2 = jugador2->getPosicion();
-            QRect rj2(
-                static_cast<int>(p2.x),
-                450 + static_cast<int>(p2.y),
-                60, 100);
-
+            QRect rj2(static_cast<int>(p2.x), 450 + static_cast<int>(p2.y), 60, 100);
             if (rf.intersects(rj2))
             {
-                float escudo = jugador2->getEscudo();
-                if (escudo > 0.0f)
-                    jugador2->setEscudo(escudo - DANIO_FLECHA < 0.0f ? 0.0f : escudo - DANIO_FLECHA);
+                float esc = jugador2->getEscudo();
+                if (esc > 0.0f)
+                    jugador2->setEscudo(esc - DANIO_FLECHA < 0.0f ? 0.0f : esc - DANIO_FLECHA);
                 else
-                    jugador2->setVida(jugador2->getVida() - DANIO_FLECHA < 0.0f ? 0.0f : jugador2->getVida() - DANIO_FLECHA);
-
+                    jugador2->setVida(jugador2->getVida() - DANIO_FLECHA < 0.0f
+                                          ? 0.0f : jugador2->getVida() - DANIO_FLECHA);
                 f->desactivar();
                 continue;
             }
@@ -328,12 +417,12 @@ void Nivel2::comprobarColisionesFlechas()
     }
 }
 
-// helpers
-bool  Nivel2::terminado()                { return finNivel; }
-float Nivel2::getVelocidadMundo() const  { return 0.0f; }
-void  Nivel2::manejarClick(int, int)     {}
-bool  Nivel2::pidioReinicio()     const  { return false; }
-bool  Nivel2::pidioSiguienteNivel() const { return false; }
+// Helpers públicos simples
+bool  Nivel2::terminado()                  { return finNivel; }
+float Nivel2::getVelocidadMundo() const    { return 0.0f; }
+void  Nivel2::manejarClick(int, int)       {}
+bool  Nivel2::pidioReinicio()     const    { return false; }
+bool  Nivel2::pidioSiguienteNivel() const  { return false; }
 
 void Nivel2::configurarMovimiento(float nuevoDt, float)
 {
