@@ -21,6 +21,16 @@ MainWindow::MainWindow(QWidget* parent)
     fondoCargado(false),
     menuActivo(true),
     reproduciendo(false),
+    mostrandoCargaN1(false),
+    temporizadorCargaN1(0.0f),
+    dificultadPendiente(Nivel1::NORMAL),
+    mostrandoEntreNiveles(false),
+    temporizadorEntreNiveles(0.0f),
+    mostrandoCargaN2(false),
+    temporizadorCargaN2(0.0f),
+    mostrandoPerdedor(false),
+    temporizadorPerdedor(0.0f),
+    mostrandoVideoFinal(false),
     mediaPlayer(nullptr),
     videoWidget(nullptr)
 {
@@ -34,6 +44,14 @@ MainWindow::MainWindow(QWidget* parent)
     musicaMenu.setLoopCount(QSoundEffect::Infinite);
     musicaMenu.setVolume(0.5f);
     musicaMenu.play();
+
+    musicaNivel1.setSource(QUrl("qrc:/cancion nivel1.wav"));
+    musicaNivel1.setLoopCount(QSoundEffect::Infinite);
+    musicaNivel1.setVolume(0.5f);
+
+    musicaNivel2.setSource(QUrl("qrc:/cancion n2.wav"));
+    musicaNivel2.setLoopCount(QSoundEffect::Infinite);
+    musicaNivel2.setVolume(0.5f);
 
     connect(timer, &QTimer::timeout, this, &MainWindow::loop);
     timer->start(16);
@@ -97,16 +115,79 @@ void MainWindow::cargarFondo()
     fondo        = QPixmap::fromImage(img);
     fondoCargado = true;
 
-    fondoMenu = QPixmap(":/menu-1.jpeg").scaled(
+    fondoMenu = QPixmap(":/menu-1.png").scaled(
+        1024, 668,
+        Qt::IgnoreAspectRatio,
+        Qt::SmoothTransformation
+        );
+
+    pantallaCargaN1 = QPixmap(":/pantalla de carga n1.png").scaled(
+        1024, 668,
+        Qt::IgnoreAspectRatio,
+        Qt::SmoothTransformation
+        );
+
+    pantallaCargaEntreNiveles = QPixmap(":/carga entreniveles.png").scaled(
+        1024, 668,
+        Qt::IgnoreAspectRatio,
+        Qt::SmoothTransformation
+        );
+
+    pantallaCargaN2 = QPixmap(":/pantalla de carga n2.png").scaled(
+        1024, 668,
+        Qt::IgnoreAspectRatio,
+        Qt::SmoothTransformation
+        );
+
+    pantallaPerdedor = QPixmap(":/perdedor.png").scaled(
         1024, 668,
         Qt::IgnoreAspectRatio,
         Qt::SmoothTransformation
         );
 }
 
+// ─── Helpers para detectar derrota/victoria en cada nivel
+
+static bool jugadorPerdioNivel1(Nivel* nivel)
+{
+    Nivel1* n1 = dynamic_cast<Nivel1*>(nivel);
+    if (!n1) return false;
+    return n1->pidioReinicio() && !n1->pidioSiguienteNivel();
+}
+
+static bool jugadorPerdioNivel2(Nivel* nivel)
+{
+    Nivel2* n2 = dynamic_cast<Nivel2*>(nivel);
+    if (!n2 || !n2->terminado()) return false;
+    Jugador* j1 = n2->getJugador1();
+    return j1 && j1->getVida() <= 0;
+}
+
+static bool jugadorGanoNivel2(Nivel* nivel)
+{
+    Nivel2* n2 = dynamic_cast<Nivel2*>(nivel);
+    if (!n2 || !n2->terminado()) return false;
+    Jugador* j1 = n2->getJugador1();
+    Jugador* j2 = n2->getJugador2();
+    // El jugador gana si j1 sigue vivo y j2 fue derrotado
+    return j1 && j1->getVida() > 0 && j2 && j2->getVida() <= 0;
+}
+
+// ─── Flujo nivel 1
+
 void MainWindow::iniciarNivel1(Nivel1::Dificultad dificultad)
 {
+    dificultadPendiente = dificultad;
+    mostrandoCargaN1    = true;
+    temporizadorCargaN1 = 0.0f;
+    menuActivo          = false;
+}
+
+void MainWindow::mostrarPantallaCargaN1(Nivel1::Dificultad dificultad)
+{
     musicaMenu.stop();
+    musicaNivel1.play();
+
     delete nivel;
 
     nivel = new Nivel1(dificultad);
@@ -115,11 +196,20 @@ void MainWindow::iniciarNivel1(Nivel1::Dificultad dificultad)
     scrollMundo    = 0.0f;
     velocidadMundo = nivel->getVelocidadMundo();
 
-    menuActivo = false;
+    mostrandoCargaN1 = false;
 }
+
+// ─── Flujo nivel 2
 
 void MainWindow::iniciarNivel2()
 {
+    mostrandoEntreNiveles    = true;
+    temporizadorEntreNiveles = 0.0f;
+}
+
+void MainWindow::iniciarCutscene()
+{
+    musicaNivel1.stop();
     reproducirCutscene();
 }
 
@@ -172,14 +262,14 @@ void MainWindow::onVideoTerminado(QMediaPlayer::PlaybackState state)
         mediaPlayer = nullptr;
     }
 
-    setStyleSheet("background-color: black;");
+    setStyleSheet("");
+    reproduciendo       = false;
+    mostrandoCargaN2    = true;
+    temporizadorCargaN2 = 0.0f;
 
-    QTimer::singleShot(3000, this, [this]()
-                       {
-                           setStyleSheet("");
-                           reproduciendo = false;
-                           iniciarNivel2Real();
-                       });
+    musicaNivel2.play();
+
+    timer->start(16);
 }
 
 void MainWindow::iniciarNivel2Real()
@@ -192,24 +282,164 @@ void MainWindow::iniciarNivel2Real()
     scrollMundo    = 0.0f;
     velocidadMundo = nivel->getVelocidadMundo();
 
-    menuActivo = false;
+    menuActivo       = false;
+    mostrandoCargaN2 = false;
+}
+
+// ─── Video final (victoria nivel 2)
+
+void MainWindow::reproducirVideoFinal()
+{
+    musicaNivel1.stop();
+    musicaNivel2.stop();
+
+    delete nivel;
+    nivel = nullptr;
+
+    reproduciendo       = true;
+    mostrandoVideoFinal = true;
+    timer->stop();
+
+    setStyleSheet("background-color: black;");
+
+    videoWidget = new QVideoWidget(this);
+    videoWidget->setGeometry(0, 0, 1024, 768);
+    videoWidget->show();
+    videoWidget->raise();
+
+    mediaPlayer = new QMediaPlayer(this);
+
+    QAudioOutput* audioOutput = new QAudioOutput(this);
+    audioOutput->setVolume(0.8f);
+    mediaPlayer->setAudioOutput(audioOutput);
+
+    mediaPlayer->setVideoOutput(videoWidget);
+    mediaPlayer->setSource(QUrl("qrc:/final.mp4"));
+
+    connect(
+        mediaPlayer,
+        &QMediaPlayer::playbackStateChanged,
+        this,
+        &MainWindow::onVideoFinalTerminado
+        );
+
+    mediaPlayer->play();
+}
+
+void MainWindow::onVideoFinalTerminado(QMediaPlayer::PlaybackState state)
+{
+    if (state != QMediaPlayer::StoppedState)
+        return;
+
+    if (videoWidget)
+    {
+        videoWidget->hide();
+        videoWidget->deleteLater();
+        videoWidget = nullptr;
+    }
+
+    if (mediaPlayer)
+    {
+        mediaPlayer->deleteLater();
+        mediaPlayer = nullptr;
+    }
+
+    setStyleSheet("");
+    reproduciendo       = false;
+    mostrandoVideoFinal = false;
+
+    // Al terminar el video final volvemos al menú
+    volverAlMenu();
 
     timer->start(16);
 }
 
+// ─── Pantalla de derrota
+
+void MainWindow::mostrarPantallaPerdedor()
+{
+    musicaNivel1.stop();
+    musicaNivel2.stop();
+
+    delete nivel;
+    nivel = nullptr;
+
+    scrollMundo           = 0.0f;
+    mostrandoPerdedor     = true;
+    temporizadorPerdedor  = 0.0f;
+}
+
+// ─── Volver al menú ─
+
 void MainWindow::volverAlMenu()
 {
+    musicaNivel1.stop();
+    musicaNivel2.stop();
+
     delete nivel;
 
     nivel       = nullptr;
     scrollMundo = 0.0f;
     menuActivo  = true;
 
+    mostrandoPerdedor   = false;
+    mostrandoVideoFinal = false;
+
     musicaMenu.play();
 }
 
+//  Loop principal
+
 void MainWindow::loop()
 {
+    // Pantalla de derrota: espera 3 segundos y vuelve al menú
+    if (mostrandoPerdedor)
+    {
+        temporizadorPerdedor += 1.0f / 60.0f;
+
+        if (temporizadorPerdedor >= 3.0f)
+            volverAlMenu();
+
+        update();
+        return;
+    }
+
+    if (mostrandoCargaN1)
+    {
+        temporizadorCargaN1 += 1.0f / 60.0f;
+
+        if (temporizadorCargaN1 >= 5.0f)
+            mostrarPantallaCargaN1(dificultadPendiente);
+
+        update();
+        return;
+    }
+
+    if (mostrandoEntreNiveles)
+    {
+        temporizadorEntreNiveles += 1.0f / 60.0f;
+
+        if (temporizadorEntreNiveles >= 5.0f)
+        {
+            mostrandoEntreNiveles = false;
+            iniciarCutscene();
+        }
+
+        update();
+        return;
+    }
+
+    if (mostrandoCargaN2)
+    {
+        temporizadorCargaN2 += 1.0f / 60.0f;
+
+        if (temporizadorCargaN2 >= 5.0f)
+            iniciarNivel2Real();
+
+        update();
+        return;
+    }
+
     if (menuActivo || reproduciendo)
     {
         update();
@@ -222,6 +452,23 @@ void MainWindow::loop()
     nivel->configurarMovimiento(dt, scrollMundo);
     nivel->actualizar();
 
+    // ── Detectar victoria nivel 2
+    if (jugadorGanoNivel2(nivel))
+    {
+        reproducirVideoFinal();
+        update();
+        return;
+    }
+
+    // ── Detectar derrota (nivel 1 o nivel 2)
+    if (jugadorPerdioNivel1(nivel) || jugadorPerdioNivel2(nivel))
+    {
+        mostrarPantallaPerdedor();
+        update();
+        return;
+    }
+
+    // Avanzar al siguiente nivel
     if (nivel->pidioSiguienteNivel())
     {
         iniciarNivel2();
@@ -236,6 +483,8 @@ void MainWindow::loop()
 
     update();
 }
+
+// ─── Render nivel 2
 
 void MainWindow::renderizarNivel2(QPainter& painter)
 {
@@ -271,12 +520,10 @@ void MainWindow::renderizarNivel2(QPainter& painter)
         painter.drawRect(screenX, screenY, 60, 100);
     }
 
-    // ── dibujar flechas ───────────────────────────────────────────────────────
     painter.setPen(Qt::NoPen);
     for (auto* f : nivel2->getFlechas())
         f->renderizar(painter);
 
-    // ── mensaje fin de nivel ──────────────────────────────────────────────────
     if (nivel2->terminado())
     {
         painter.setPen(Qt::white);
@@ -288,7 +535,6 @@ void MainWindow::renderizarNivel2(QPainter& painter)
             painter.drawText(300, 200, "GANASTE");
     }
 
-    // ── barras HUD ────────────────────────────────────────────────────────────
     const int BARRA_W  = 380;
     const int BARRA_H  = 16;
     const int BARRA_Y1 = 20;
@@ -343,9 +589,68 @@ void MainWindow::renderizarNivel2(QPainter& painter)
     }
 }
 
+// ─── paintEvent
+
 void MainWindow::paintEvent(QPaintEvent*)
 {
     QPainter painter(this);
+
+    // Pantalla de derrota
+    if (mostrandoPerdedor)
+    {
+        if (!pantallaPerdedor.isNull())
+            painter.drawPixmap(0, 0, 1024, 768, pantallaPerdedor);
+        else
+        {
+            painter.fillRect(0, 0, 1024, 768, Qt::black);
+            painter.setPen(Qt::red);
+            painter.setFont(QFont("Arial", 48, QFont::Bold));
+            painter.drawText(QRect(0, 0, 1024, 768), Qt::AlignCenter, "PERDISTE");
+        }
+        return;
+    }
+
+    if (mostrandoCargaN1)
+    {
+        if (!pantallaCargaN1.isNull())
+            painter.drawPixmap(0, 0, 1024, 768, pantallaCargaN1);
+        else
+        {
+            painter.fillRect(0, 0, 1024, 768, Qt::black);
+            painter.setPen(Qt::white);
+            painter.setFont(QFont("Arial", 30, QFont::Bold));
+            painter.drawText(QRect(0, 0, 1024, 768), Qt::AlignCenter, "Cargando...");
+        }
+        return;
+    }
+
+    if (mostrandoEntreNiveles)
+    {
+        if (!pantallaCargaEntreNiveles.isNull())
+            painter.drawPixmap(0, 0, 1024, 768, pantallaCargaEntreNiveles);
+        else
+        {
+            painter.fillRect(0, 0, 1024, 768, Qt::black);
+            painter.setPen(Qt::white);
+            painter.setFont(QFont("Arial", 30, QFont::Bold));
+            painter.drawText(QRect(0, 0, 1024, 768), Qt::AlignCenter, "Cargando...");
+        }
+        return;
+    }
+
+    if (mostrandoCargaN2)
+    {
+        if (!pantallaCargaN2.isNull())
+            painter.drawPixmap(0, 0, 1024, 768, pantallaCargaN2);
+        else
+        {
+            painter.fillRect(0, 0, 1024, 768, Qt::black);
+            painter.setPen(Qt::white);
+            painter.setFont(QFont("Arial", 30, QFont::Bold));
+            painter.drawText(QRect(0, 0, 1024, 768), Qt::AlignCenter, "Cargando...");
+        }
+        return;
+    }
 
     if (menuActivo)
     {
@@ -376,18 +681,21 @@ void MainWindow::paintEvent(QPaintEvent*)
     }
 }
 
+// ─── Menú
 void MainWindow::dibujarMenu(QPainter& painter)
 {
     painter.drawPixmap(0, 0, fondoMenu);
 
-    botonNormal  = QRect(362, 310, 300, 70);
-    botonDificil = QRect(362, 420, 300, 70);
+    botonNormal  = QRect(162, 420, 210, 200);
+    botonDificil = QRect(660, 420, 210, 200);
 
     painter.setBrush(Qt::transparent);
     painter.setPen(Qt::NoPen);
     painter.drawRect(botonNormal);
     painter.drawRect(botonDificil);
 }
+
+// ─── Inputs
 
 void MainWindow::keyPressEvent(QKeyEvent* event)
 {
@@ -398,6 +706,9 @@ void MainWindow::keyPressEvent(QKeyEvent* event)
         return;
     }
 
+    if (mostrandoCargaN1 || mostrandoEntreNiveles || mostrandoCargaN2 || mostrandoPerdedor)
+        return;
+
     if (menuActivo || !nivel)
         return;
 
@@ -406,19 +717,22 @@ void MainWindow::keyPressEvent(QKeyEvent* event)
     if (nivel2)
     {
         if (event->key() == Qt::Key_A)
-            nivel2->moverJugadorIzquierda();
+            nivel2->keyPresado(Qt::Key_A);
 
         if (event->key() == Qt::Key_D)
-            nivel2->moverJugadorDerecha();
+            nivel2->keyPresado(Qt::Key_D);
 
         if (event->key() == Qt::Key_W)
-            nivel2->saltoJugador();
+            nivel2->keyPresado(Qt::Key_W);
 
         if (event->key() == Qt::Key_Z)
             nivel2->ataqueJugador();
 
         if (event->key() == Qt::Key_X)
             nivel2->bloqueoJugador(true);
+
+        if (event->key() == Qt::Key_I)
+            nivel2->setIAActiva(!nivel2->getIAActiva());
 
         return;
     }
@@ -440,6 +754,12 @@ void MainWindow::keyReleaseEvent(QKeyEvent* event)
     Nivel2* nivel2 = dynamic_cast<Nivel2*>(nivel);
     if (!nivel2) return;
 
+    if (event->key() == Qt::Key_A)
+        nivel2->keySoltado(Qt::Key_A);
+
+    if (event->key() == Qt::Key_D)
+        nivel2->keySoltado(Qt::Key_D);
+
     if (event->key() == Qt::Key_X)
         nivel2->bloqueoJugador(false);
 }
@@ -448,6 +768,9 @@ void MainWindow::mousePressEvent(QMouseEvent* event)
 {
     int x = event->position().x();
     int y = event->position().y();
+
+    if (mostrandoCargaN1 || mostrandoEntreNiveles || mostrandoCargaN2 || mostrandoPerdedor)
+        return;
 
     if (menuActivo)
     {
@@ -465,3 +788,4 @@ void MainWindow::mousePressEvent(QMouseEvent* event)
 
     nivel->manejarClick(x, y);
 }
+

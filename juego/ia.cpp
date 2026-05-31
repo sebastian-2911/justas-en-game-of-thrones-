@@ -1,14 +1,13 @@
 #include "ia.h"
 
-
-// Constructor
-
 IA::IA()
     : robertBloqueando(false)
     , timerEspera(0.0f)
     , timerBloqueo(0.0f)
     , timerRetroceso(0.0f)
     , cooldownInterno(0.0f)
+    , timerSinAtaque(0.0f)
+    , timerPresion(0.0f)
     , accionMover(false)
     , accionMoverDir(true)
     , accionAtacar(false)
@@ -18,11 +17,11 @@ IA::IA()
     , golpesRecibidos(0)
     , golpesDados(0)
     , fallosSegidos(0)
+    , golpesConsecutivos(0)
+    , golpesRecibidosSegidos(0)
     , pausaExtra(0.0f)
+    , agresividad(0.40f)
 {}
-
-
-// actualizar – punto de entrada único por frame
 
 void IA::actualizar(Jugador* rhaegar, Jugador* robert,
                     float& velY2, bool& enSuelo2,
@@ -31,97 +30,134 @@ void IA::actualizar(Jugador* rhaegar, Jugador* robert,
 {
     if (!rhaegar || !robert) return;
 
-    // ── Resetear flags
     accionMover      = false;
     accionAtacar     = false;
     accionSaltar     = false;
     accionBloqueo    = false;
     accionRetroceder = false;
 
-    // ── Bajar timers
-    if (timerEspera    > 0.0f) timerEspera    -= dt;
-    if (timerBloqueo   > 0.0f) timerBloqueo   -= dt;
-    if (timerRetroceso > 0.0f) timerRetroceso -= dt;
+    if (timerEspera     > 0.0f) timerEspera     -= dt;
+    if (timerBloqueo    > 0.0f) timerBloqueo    -= dt;
+    if (timerRetroceso  > 0.0f) timerRetroceso  -= dt;
     if (cooldownInterno > 0.0f) cooldownInterno -= dt;
-    // sincronizar con el cooldown externo
+    if (timerPresion    > 0.0f) timerPresion    -= dt;
     if (cooldownAtaque2 < cooldownInterno) cooldownInterno = cooldownAtaque2;
 
-    // Leer estado
+    timerSinAtaque += dt;
+
     Vector3 pr = rhaegar->getPosicion();
     Vector3 pb = robert->getPosicion();
 
-    float diff    = pb.x - pr.x;
-    float absDist = diff < 0.0f ? -diff : diff;
-    bool  enSuelo = enSuelo2;
+    float diff        = pb.x - pr.x;
+    float absDist     = diff < 0.0f ? -diff : diff;
+    float vidaRhaegar = rhaegar->getVida();
+    float vidaRobert  = robert->getVida();
+    float escRobert   = robert->getEscudo();
+    float escRhaegar  = rhaegar->getEscudo();
+    bool  enSuelo     = enSuelo2;
+    bool  ganando     = vidaRobert < vidaRhaegar - 15.0f;
+    bool  escudoAlto  = escRhaegar > 55.0f;
 
-    float vidaRhaegar  = rhaegar->getVida();
-    float vidaRobert   = robert->getVida();
-    float escudoRobert = robert->getEscudo();
-
-    // Dirección hacia Robert
     accionMoverDir = (diff >= 0.0f);
 
-    //  DECISIÓN
     bool puedeAtacar = !robertBloqueando
-                       && timerEspera    <= 0.0f
+                       && timerEspera     <= 0.0f
                        && cooldownInterno <= 0.0f;
 
-    // ── CASO 1: vida baja → defensivo
-    if (vidaRhaegar < VIDA_BAJA)
+    if (timerSinAtaque >= TIEMPO_OFENSIVA && vidaRhaegar > VIDA_BAJA)
     {
-        if (absDist < DIST_CERCA)
+        timerSinAtaque = 0.0f;
+        timerPresion   = 2.0f;
+        pausaExtra     = 0.0f;
+    }
+
+    bool modoPresion = (timerPresion > 0.0f && !robertBloqueando);
+
+    if (vidaRhaegar < VIDA_CRITICA)
+    {
+        if (timerSinAtaque >= 1.5f)
         {
-            // Bloquear si no está bloqueando ya
-            if (timerBloqueo <= 0.0f)
-            {
-                accionBloqueo  = true;
-                timerBloqueo   = 0.5f;
-                timerRetroceso = 0.4f;
-                timerEspera    = 0.35f + pausaExtra;
-            }
-            else if (timerRetroceso > 0.0f)
-            {
-                accionRetroceder = true;
-            }
-            // Contraataque si Robert deja de bloquear
-            else if (puedeAtacar && absDist <= DIST_ATAQUE && !robertBloqueando)
-            {
-                accionAtacar = true;
-            }
+            timerSinAtaque = 0.0f;
+            timerPresion   = 3.0f;
+            pausaExtra     = 0.0f;
         }
-        else if (absDist <= DIST_ATAQUE && puedeAtacar)
+
+        modoPresion = true;
+
+        if (absDist > DIST_ATAQUE)
+        {
+            accionMover = true;
+            if (enSuelo && absDist > DIST_MEDIA * 0.6f)
+                accionSaltar = true;
+        }
+        else if (puedeAtacar)
         {
             accionAtacar = true;
         }
-        else
+        else if (absDist < DIST_CERCA * 0.6f && timerBloqueo <= 0.0f)
         {
-            // Reposicionarse lentamente
-            if (timerEspera <= 0.0f)
-                accionMover = true;
+            accionBloqueo = true;
+            timerBloqueo  = 0.15f;
         }
     }
-    // CASO 2: Robert bloqueando → no atacar, acercarse o esperar
-    else if (robertBloqueando)
+    else if (vidaRhaegar < VIDA_BAJA)
     {
-        if (absDist > DIST_LEJOS)
+        if (timerSinAtaque >= 2.0f)
+        {
+            timerSinAtaque = 0.0f;
+            timerPresion   = 2.5f;
+            pausaExtra     = 0.0f;
+        }
+
+        modoPresion = true;
+
+        if (absDist > DIST_ATAQUE)
         {
             accionMover = true;
+            if (enSuelo && absDist > DIST_MEDIA * 0.7f)
+                accionSaltar = true;
         }
-        else if (absDist < DIST_CERCA)
+        else if (puedeAtacar)
         {
-            // Retroceder un poco para salir del rango
-            accionRetroceder = true;
+            accionAtacar = true;
         }
-        // Si está en zona media: esperar que suelte el bloqueo (no hacer nada)
+        else if (absDist < DIST_CERCA * 0.75f && timerBloqueo <= 0.0f)
+        {
+            accionBloqueo = true;
+            timerBloqueo  = 0.20f;
+        }
     }
-    // ── CASO 3: Robert sin escudo → full presión
-    else if (escudoRobert <= 0.0f && vidaRobert < vidaRhaegar)
+    else if (modoPresion)
     {
         if (absDist > DIST_ATAQUE)
         {
             accionMover = true;
-            // Salto para acortar distancia
-            if (enSuelo && absDist > 120.0f)
+            if (enSuelo && absDist > DIST_MEDIA * 0.7f)
+                accionSaltar = true;
+        }
+        else if (puedeAtacar)
+        {
+            accionAtacar = true;
+        }
+        else if (absDist < DIST_CERCA * 0.75f && timerBloqueo <= 0.0f)
+        {
+            accionBloqueo = true;
+            timerBloqueo  = 0.20f;
+        }
+    }
+    else if (robertBloqueando)
+    {
+        if (absDist > DIST_LEJOS)
+            accionMover = true;
+        else if (absDist < DIST_CERCA)
+            accionRetroceder = true;
+    }
+    else if (escRobert <= 0.0f)
+    {
+        if (absDist > DIST_ATAQUE)
+        {
+            accionMover = true;
+            if (enSuelo && absDist > 110.0f)
                 accionSaltar = true;
         }
         else if (puedeAtacar)
@@ -129,74 +165,84 @@ void IA::actualizar(Jugador* rhaegar, Jugador* robert,
             accionAtacar = true;
         }
     }
-    // ── CASO 4: Robert muy lejos → perseguir
+    else if (ganando && escudoAlto)
+    {
+        if (absDist > DIST_ATAQUE)
+        {
+            accionMover = true;
+            if (enSuelo && absDist > DIST_MEDIA)
+                accionSaltar = true;
+        }
+        else if (puedeAtacar)
+        {
+            accionAtacar = true;
+        }
+    }
     else if (absDist > DIST_LEJOS)
     {
         accionMover = true;
-        if (enSuelo && timerEspera <= 0.0f)
+        if (enSuelo)
             accionSaltar = true;
     }
-    // ── CASO 5: Robert en rango de ataque → atacar
     else if (absDist <= DIST_ATAQUE)
     {
         if (puedeAtacar)
         {
             accionAtacar = true;
         }
-        else if (timerBloqueo <= 0.0f && absDist < DIST_CERCA * 0.8f)
+        else if (timerBloqueo <= 0.0f && absDist < DIST_CERCA * 0.75f)
         {
-            // Demasiado cerca y no puede atacar → bloquear brevemente
             accionBloqueo = true;
-            timerBloqueo  = 0.3f;
+            timerBloqueo  = 0.25f;
         }
     }
-    // ─CASO 6: distancia media → acercarse
+    else if (absDist <= DIST_MEDIA)
+    {
+        accionMover = true;
+        if (enSuelo && absDist > 100.0f && agresividad > 0.35f)
+            accionSaltar = true;
+    }
     else
     {
         accionMover = true;
-
-        // Salto ofensivo si está lejos y lleva ventaja
-        if (enSuelo && absDist > 120.0f && golpesDados > golpesRecibidos)
-            accionSaltar = true;
     }
 
-    // Imperfección: 8% de fallo aleatorio
     static unsigned int sem = 77777u;
     sem = sem * 1664525u + 1013904223u;
     float azar = static_cast<float>(sem & 0xFFFFu) / 65535.0f;
-    if (azar < 0.08f)
+    if (azar < PROB_ERROR && vidaRhaegar >= VIDA_BAJA)
     {
         accionAtacar  = false;
         accionBloqueo = false;
     }
 
-    // EJECUTAR ACCIONES
     Vector3 pos = rhaegar->getPosicion();
 
-    // Movimiento
+    float velActual = VEL_NORMAL;
+    if (vidaRhaegar < VIDA_CRITICA)     velActual = VEL_DESESPERADA;
+    else if (vidaRhaegar < VIDA_BAJA)   velActual = VEL_PRESION;
+    else if (modoPresion)               velActual = VEL_PRESION;
+    else if (golpesDados > golpesRecibidos + 2) velActual = VEL_RAPIDA;
+
     if (accionRetroceder)
     {
         float dir = accionMoverDir ? -1.0f : 1.0f;
-        pos.x += dir * VEL_NORMAL * dt;
+        pos.x += dir * velActual * dt;
         rhaegar->setPosicion(pos.x, pos.y, pos.z);
     }
     else if (accionMover)
     {
-        // Velocidad rápida si lleva ventaja, normal si no
-        float vel = (golpesDados > golpesRecibidos + 2) ? VEL_RAPIDA : VEL_NORMAL;
         float dir = accionMoverDir ? 1.0f : -1.0f;
-        pos.x += dir * vel * dt;
+        pos.x += dir * velActual * dt;
         rhaegar->setPosicion(pos.x, pos.y, pos.z);
     }
 
-    // Salto
     if (accionSaltar && enSuelo2)
     {
         velY2    = FUERZA_SALTO;
         enSuelo2 = false;
     }
 
-    // Ataque
     if (accionAtacar && cooldownInterno <= 0.0f)
     {
         pr = rhaegar->getPosicion();
@@ -210,16 +256,16 @@ void IA::actualizar(Jugador* rhaegar, Jugador* robert,
 
         if (col)
         {
-            // Cooldown se reduce si lleva ventaja (más agresivo)
-            float cd = COOLDOWN_BASE;
-            if (golpesDados > golpesRecibidos + 3) cd *= 0.75f;
-            if (cd < 0.10f) cd = 0.10f;
+            float cdMult = (vidaRhaegar < VIDA_CRITICA) ? 0.65f
+                           : (vidaRhaegar < VIDA_BAJA)    ? 0.75f
+                                                        : 1.0f;
+            float cd = COOLDOWN_BASE * cdMult * (1.0f - agresividad * 0.45f);
+            if (cd < 0.09f) cd = 0.09f;
 
-            cooldownInterno  = cd;
-            cooldownAtaque2  = cd;
-            timerEspera      = 0.12f + pausaExtra * 0.4f; // pausa breve post-golpe
+            cooldownInterno = cd;
+            cooldownAtaque2 = cd;
+            timerEspera     = 0.08f + pausaExtra * 0.3f;
 
-            // Daño
             float esc = robert->getEscudo();
             if (esc > 0.0f)
                 robert->setEscudo(esc - 25.0f < 0.0f ? 0.0f : esc - 25.0f);
@@ -227,29 +273,46 @@ void IA::actualizar(Jugador* rhaegar, Jugador* robert,
                 robert->setVida(robert->getVida() - 30.0f < 0.0f
                                     ? 0.0f : robert->getVida() - 30.0f);
 
-            // Retroceso físico
             float dir       = (pb.x >= pr.x) ? 1.0f : -1.0f;
             float masaTotal = MASA_R1 + MASA_R2;
             velEmpuje1 +=  dir * FUERZA_EMPUJE * (MASA_R2 / masaTotal);
             velEmpuje2 += -dir * FUERZA_EMPUJE * (MASA_R1 / masaTotal);
 
             golpesDados++;
+            golpesConsecutivos++;
+            golpesRecibidosSegidos = 0;
             fallosSegidos = 0;
-            // Reducir pausa acumulada al conectar
-            pausaExtra -= 0.04f;
-            if (pausaExtra < 0.0f) pausaExtra = 0.0f;
+
+            if (pausaExtra > 0.0f)
+            {
+                pausaExtra -= 0.05f;
+                if (pausaExtra < 0.0f) pausaExtra = 0.0f;
+            }
+
+            if (golpesConsecutivos >= 2)
+            {
+                agresividad += 0.04f;
+                if (agresividad > 1.0f) agresividad = 1.0f;
+            }
+
+            timerSinAtaque = 0.0f;
         }
         else
         {
-            // Falló: acumular pausa (máx 0.3s)
             fallosSegidos++;
-            pausaExtra += 0.07f;
-            if (pausaExtra > 0.30f) pausaExtra = 0.30f;
-            timerEspera = 0.18f + pausaExtra;
+            golpesConsecutivos = 0;
+            pausaExtra += 0.06f;
+            if (pausaExtra > 0.28f) pausaExtra = 0.28f;
+            timerEspera = 0.15f + pausaExtra;
+
+            if (vidaRhaegar >= VIDA_BAJA)
+            {
+                agresividad -= 0.02f;
+                if (agresividad < 0.20f) agresividad = 0.20f;
+            }
         }
     }
 }
-
 
 void IA::notificarBloqueoRobert(bool bloqueando)
 {
@@ -259,17 +322,23 @@ void IA::notificarBloqueoRobert(bool bloqueando)
 void IA::notificarGolpeRecibido()
 {
     golpesRecibidos++;
-    // Si recibe muchos golpes seguidos, bloquear un momento
-    if (golpesRecibidos % 3 == 0 && timerBloqueo <= 0.0f)
+    golpesRecibidosSegidos++;
+    golpesConsecutivos = 0;
+    timerSinAtaque     = 0.0f;
+
+    if (golpesRecibidosSegidos >= 2 && timerBloqueo <= 0.0f)
     {
-        timerBloqueo   = 0.35f;
-        timerRetroceso = 0.25f;
+        timerBloqueo   = 0.20f;
+        timerRetroceso = 0.15f;
+        golpesRecibidosSegidos = 0;
     }
+
+    agresividad += 0.05f;
+    if (agresividad > 1.0f) agresividad = 1.0f;
 }
 
 void IA::notificarPatronHitAndRun()
 {
-    // bloquear al acercarse la próxima vez
-    pausaExtra += 0.05f;
-    if (pausaExtra > 0.30f) pausaExtra = 0.30f;
+    pausaExtra += 0.04f;
+    if (pausaExtra > 0.28f) pausaExtra = 0.28f;
 }

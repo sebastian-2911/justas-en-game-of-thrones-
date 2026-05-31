@@ -1,18 +1,18 @@
-// ========================== nivel1.h ==========================
 #ifndef NIVEL1_H
 #define NIVEL1_H
 
 #include "jugador.h"
 #include "obstaculo.h"
-
 #include <QPainter>
 #include <QRect>
+#include <QSoundEffect>
+#include <QUrl>
 #include <vector>
 #include "nivel.h"
+
 class Nivel1 : public Nivel
 {
 public:
-
     enum Dificultad
     {
         NORMAL,
@@ -21,132 +21,91 @@ public:
 
     struct ConfigDificultad
     {
-        float intervaloInicial;
-        float intervaloMinimo;
-        float aceleracion;
-        float velocidadMundo;
+        float intervaloInicial;  // segundos entre spawns al inicio
+        float intervaloMinimo;   // intervalo mas rapido posible
+        float aceleracion;       // reduccion por segundo
+        float velocidadMundo;    // pixeles/seg de scroll
     };
 
-    Nivel1(
-        Dificultad dificultadSeleccionada
-        = NORMAL
-        );
-
+    Nivel1(Dificultad dificultadSeleccionada = NORMAL);
     ~Nivel1();
 
     void iniciar();
-
     void actualizar();
-
     void renderizar(QPainter& painter);
-
-    void configurarMovimiento(
-        float nuevoDt,
-        float nuevoScroll
-        );
-
+    void configurarMovimiento(float nuevoDt, float nuevoScroll);
     float getVelocidadMundo() const;
-
     void manejarClick(int x, int y);
-
     bool pidioReinicio() const;
-
     bool pidioSiguienteNivel() const;
-
     bool terminado();
-
     Jugador* getJugador();
 
 private:
-
-    // jugador
-    Jugador* jugador;
-
-    // obstaculos
+    // ---- entidades ----
+    Jugador*                jugador;
     std::vector<Obstaculo*> obstaculos;
 
-    // dificultad
-    Dificultad dificultad;
-
+    // ---- dificultad ----
+    Dificultad       dificultad;
     ConfigDificultad config;
-
     ConfigDificultad configs[2];
 
-    // tiempo
-    float tiempoTotalNivel;
-
-    float tiempoRestante;
 
     float tiempoJuego;
-
+    float tiempoTotalNivel;   // 60 s
     float tiempoGeneracion;
-
     float tiempoAlerta;
-
     float tiempoFinNivel;
-
     float intervaloActual;
 
-    // movimiento
-    float dt;
+    // ---- penalizacion -
+    float tiempoPerdidoPorColisiones; // derrota si >= 30 s
 
+    // ---- fases
+    bool jefeFinalActivo;
+    bool jugadorBloqueadoCentro;
+
+    // ---- movimiento mundo
+    float dt;
     float scrollMundo;
 
-    // estado
+    // ---- estado ----
     bool finNivel;
-
     bool finalActivo;
-
     bool llegoAlFinal;
-
+    bool perdioNivel;
     bool reinicioSolicitado;
-
     bool siguienteNivelSolicitado;
 
-    // final
+    // ---- posicion del jefe ----
     float xRealFinal;
-
     float yRealFinal;
 
-    // ui
+
+    int patronActual;
+    int contadorPatron;
+
+    // ---- ui
     QRect botonReiniciar;
 
-    // carriles
-    const float carriles[3] =
-        {
-            -1.5f,
-            0.0f,
-            1.5f
-    };
+    // ---- carriles
+    const float carriles[3] = { -1.5f, 0.0f, 1.5f };
+
+    // ---- sonido daño ----
+    QSoundEffect sonidoDanio;
 
 private:
-
     void generarObstaculo();
-
     void verificarColisiones();
-
     void limpiarObstaculos();
-
-    void escalarDificultad(float dt);
-
-    bool colision(
-        Entidad* a,
-        Entidad* b
-        );
-
+    void escalarDificultad(float deltaTiempo);
+    bool colision(Entidad* a, Entidad* b);
     bool colisionFinal();
-
-    void activarFinal();
-
+    void activarJefeFinal();
     void restarTiempo(float segundos);
-
-    void dibujarTemporizador(
-        QPainter& painter
-        );
-
-    void dibujarFinal(
-        QPainter& painter
-        );
+    void dibujarTemporizador(QPainter& painter);
+    void dibujarJefeFinal(QPainter& painter);
 };
 
-#endif
+#endif // NIVEL1_H

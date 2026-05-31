@@ -2,28 +2,19 @@
 
 Jugador::Jugador(TipoJugador tipo)
 {
-    tipoJugador = tipo;
-
-    carril = 1;
-
+    tipoJugador        = tipo;
+    carril             = 1;
+    movimientoLibre    = false;
     tiempoInvulnerable = 0.0f;
-
-    movimientoLibre = false;
-
-    hitbox = {0.8f, 1.2f, 0.0f};
-
-    posicion = {0.0f, 0.0f, 0.0f};
-
-    // nivel 2
-    velocidadY = 0.0f;
-    gravedad   = 980.0f;
-    enSuelo    = true;
-    vida       = 100.0f;
-    escudo     = 100.0f;
-
-    // animación
-    frameActual = 0;
-    tiempoFrame = 0.0f;
+    hitbox             = {0.8f, 1.2f, 0.0f};
+    posicion           = {0.0f, 0.0f, 0.0f};
+    vida               = 100.0f;
+    escudo             = 100.0f;
+    velMovX            = 0.0f;
+    velY               = 0.0f;
+    enSuelo            = true;
+    frameActual        = 0;
+    tiempoFrame        = 0.0f;
 
     QPixmap sheet;
     sheet.load(":/robert nivel1.png");
@@ -37,70 +28,59 @@ Jugador::Jugador(TipoJugador tipo)
     }
 }
 
-// ── actualizar nivel 1 ────────────────────────────────────────────────────────
-
 void Jugador::actualizar()
 {
-    if (tipoJugador == JUGADOR_NIVEL1)
+    if (tipoJugador != JUGADOR_NIVEL1) return;
+
+    if (!movimientoLibre)
+        posicion.x = carriles[carril];
+
+    if (tiempoInvulnerable > 0.0f)
+        tiempoInvulnerable -= 0.016f;
+
+    tiempoFrame += 0.016f;
+    if (tiempoFrame >= DURACION_FRAME)
     {
-        if (!movimientoLibre)
-            posicion.x = carriles[carril];
-
-        if (tiempoInvulnerable > 0.0f)
-            tiempoInvulnerable -= 0.016f;
-
-        tiempoFrame += 0.016f;
-
-        if (tiempoFrame >= DURACION_FRAME)
-        {
-            tiempoFrame -= DURACION_FRAME;
-            frameActual  = (frameActual + 1) % TOTAL_FRAMES;
-        }
+        tiempoFrame -= DURACION_FRAME;
+        frameActual  = (frameActual + 1) % TOTAL_FRAMES;
     }
 }
-
-// ── actualizar nivel 2 ────────────────────────────────────────────────────────
 
 void Jugador::actualizarNivel2(float dt)
 {
-    if (tipoJugador != JUGADOR_NIVEL2)
-        return;
+    if (tipoJugador != JUGADOR_NIVEL2) return;
 
-    // gravedad
-    velocidadY += gravedad * dt;
-    posicion.y += velocidadY * dt;
+    posicion.x += velMovX * dt;
 
-    // suelo
+    velY       += GRAVEDAD * dt;
+    posicion.y += velY * dt;
+
     if (posicion.y >= 0.0f)
     {
         posicion.y = 0.0f;
-        velocidadY = 0.0f;
+        velY       = 0.0f;
         enSuelo    = true;
     }
+    else
+    {
+        enSuelo = false;
+    }
 
-    // animación
     tiempoFrame += dt;
-
     if (tiempoFrame >= DURACION_FRAME)
     {
         tiempoFrame = 0.0f;
-        frameActual++;
-
-        if (frameActual >= TOTAL_FRAMES)
-            frameActual = 0;
+        frameActual = (frameActual + 1) % TOTAL_FRAMES;
     }
 }
 
-// ── renderizar
-
 void Jugador::renderizar(QPainter& painter)
 {
-    int screenX;
-    int screenY;
+    int screenX, screenY;
 
     if (tipoJugador == JUGADOR_NIVEL1)
     {
-        screenX = 512 + posicion.x * 180 - 140;
+        screenX = 512 + static_cast<int>(posicion.x * 180) - 140;
         screenY = 400;
     }
     else
@@ -109,10 +89,7 @@ void Jugador::renderizar(QPainter& painter)
         screenY = 450 + static_cast<int>(posicion.y);
     }
 
-    setPosicionReal(
-        static_cast<float>(screenX),
-        static_cast<float>(screenY)
-        );
+    setPosicionReal(static_cast<float>(screenX), static_cast<float>(screenY));
 
     if (!frames[frameActual].isNull())
     {
@@ -132,102 +109,57 @@ void Jugador::renderizar(QPainter& painter)
     }
 }
 
-// ── input nivel 1 ─────────────────────────────────────────────────────────────
-
 void Jugador::procesarInput(char tecla)
 {
-    if (tecla == 'a' || tecla == 'A')
-        moverIzquierda();
-    else if (tecla == 'd' || tecla == 'D')
-        moverDerecha();
+    if (tecla == 'a' || tecla == 'A') moverIzquierda();
+    else if (tecla == 'd' || tecla == 'D') moverDerecha();
 }
 
 void Jugador::moverIzquierda()
 {
-    if (carril > 0) carril--;
+    if (tipoJugador == JUGADOR_NIVEL1) { if (carril > 0) carril--; return; }
+    velMovX = -VEL_MOV;
 }
 
 void Jugador::moverDerecha()
 {
-    if (carril < 2) carril++;
+    if (tipoJugador == JUGADOR_NIVEL1) { if (carril < 2) carril++; return; }
+    velMovX = VEL_MOV;
 }
 
-// ── movimiento nivel 2
-
-void Jugador::moverIzquierdaLibre()
+void Jugador::frenar()
 {
-    posicion.x -= 15.0f;
-}
-
-void Jugador::moverDerechaLibre()
-{
-    posicion.x += 15.0f;
+    velMovX = 0.0f;
 }
 
 void Jugador::saltar()
 {
-    if (enSuelo)
-    {
-        velocidadY = -450.0f;
-        enSuelo    = false;
-    }
-}
-
-// ── combate
-
-void Jugador::atacar(Jugador* enemigo)
-{
-    if (!enemigo)          return;
-    if (!colisiona(enemigo)) return;
-
-    if (enemigo->escudo > 0.0f)
-    {
-        enemigo->escudo -= 25.0f;
-        if (enemigo->escudo < 0.0f) enemigo->escudo = 0.0f;
-    }
-    else
-    {
-        enemigo->vida -= 25.0f;
-        if (enemigo->vida < 0.0f) enemigo->vida = 0.0f;
-    }
+    if (!enSuelo) return;
+    velY    = FUERZA_SALTO;
+    enSuelo = false;
 }
 
 bool Jugador::colisiona(Jugador* otro)
 {
     if (!otro) return false;
-
-    QRect r1(
-        static_cast<int>(posicion.x),
-        static_cast<int>(posicion.y),
-        120, 220
-        );
-
-    QRect r2(
-        static_cast<int>(otro->posicion.x),
-        static_cast<int>(otro->posicion.y),
-        120, 220
-        );
-
+    QRect r1(static_cast<int>(posicion.x), static_cast<int>(posicion.y), 120, 220);
+    QRect r2(static_cast<int>(otro->posicion.x), static_cast<int>(otro->posicion.y), 120, 220);
     return r1.intersects(r2);
 }
 
-// ── getters / setters
-
-float Jugador::getVida() const
-{
-    return vida;
-}
-
-float Jugador::getEscudo() const
-{
-    return escudo;
-}
+float  Jugador::getVida()     const { return vida; }
+float  Jugador::getEscudo()   const { return escudo; }
+float  Jugador::getVelY()     const { return velY; }
+float  Jugador::getVelMovX()  const { return velMovX; }
+bool   Jugador::estaEnSuelo() const { return enSuelo; }
+int    Jugador::getCarril()   const { return carril; }
+float& Jugador::refVelY()           { return velY; }
+bool&  Jugador::refEnSuelo()        { return enSuelo; }
 
 void Jugador::setVida(float valor)
 {
     vida = valor;
-    if (vida > 100.0f) vida = 100.0f;
-    if (vida < 0.0f)   vida = 0.0f;
+    if (vida < 0.0f) vida = 0.0f;
 }
 
 void Jugador::setEscudo(float valor)
@@ -237,10 +169,8 @@ void Jugador::setEscudo(float valor)
     if (escudo < 0.0f)   escudo = 0.0f;
 }
 
-int Jugador::getCarril() const
-{
-    return carril;
-}
+void Jugador::setVelY(float valor)   { velY = valor; }
+void Jugador::setEnSuelo(bool valor) { enSuelo = valor; }
 
 void Jugador::usarMovimientoLibre(bool estado)
 {

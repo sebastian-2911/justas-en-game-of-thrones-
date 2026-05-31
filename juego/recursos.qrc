@@ -4,8 +4,16 @@
         <file>fondo.jpeg</file>
         <file>robert nivel1.png</file>
         <file>musica-menu.wav</file>
-        <file>menu-1.jpeg</file>
         <file>fondo-nevel2.png</file>
         <file>video nivel1.mp4</file>
+        <file>menu-1.png</file>
+        <file>pantalla de carga n1.png</file>
+        <file>pantalla de carga n2.png</file>
+        <file>carga entreniveles.png</file>
+        <file>perdedor.png</file>
+        <file>dano.wav</file>
+        <file>cancion n2.wav</file>
+        <file>cancion nivel1.wav</file>
+        <file>final.mp4</file>
     </qresource>
 </RCC>
