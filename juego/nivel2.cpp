@@ -4,6 +4,13 @@
 
 static const float VIDA_ROBERT  = 130.0f;
 static const float VIDA_RHAEGAR =  85.0f;
+static const float INTERVALO_OLEADA_MIN = 3.0f;
+static const int   INTERVALO_OLEADA_VARIACION = 2;
+static const float VELOCIDAD_FLECHA_X_MAX = 160.0f;
+static const float VELOCIDAD_FLECHA_Y_MIN = 280.0f;
+static const int   VELOCIDAD_FLECHA_Y_VARIACION = 221;
+static const float INTERVALO_ESCUDO_BASE = 15.0f;
+static const float INTERVALO_ESCUDO_EXTRA_VIDA_BAJA = 12.0f;
 
 struct HitRect {
     float l, r, t, b;
@@ -31,6 +38,19 @@ static HitRect hitboxAtaqueDe(const Vector3& atacante, const Vector3& defensor,
     return hx;
 }
 
+static float intervaloRegeneracionEscudo(float vidaActual, float vidaMaxima)
+{
+    if (vidaMaxima <= 0.0f)
+        return INTERVALO_ESCUDO_BASE + INTERVALO_ESCUDO_EXTRA_VIDA_BAJA;
+
+    float proporcionVida = vidaActual / vidaMaxima;
+    if (proporcionVida < 0.0f) proporcionVida = 0.0f;
+    if (proporcionVida > 1.0f) proporcionVida = 1.0f;
+
+    return INTERVALO_ESCUDO_BASE
+           + (1.0f - proporcionVida) * INTERVALO_ESCUDO_EXTRA_VIDA_BAJA;
+}
+
 Nivel2::Nivel2()
 {
     jugador1              = nullptr;
@@ -40,7 +60,8 @@ Nivel2::Nivel2()
     finNivel              = false;
     iaActiva              = true;   // IA encendida por defecto
     dt                    = 1.0f / 60.0f;
-    tiempoEscudo          = 0.0f;
+    tiempoEscudo1         = 0.0f;
+    tiempoEscudo2         = 0.0f;
     limiteIzquierdo       = 50.0f;
     limiteDerecho         = 900.0f;
     velEmpuje1            = 0.0f;
@@ -48,12 +69,13 @@ Nivel2::Nivel2()
     bloqueando1           = false;
     cooldownAtaque1       = 0.0f;
     cooldownAtaque2       = 0.0f;
-    timerPostAtaqueRobert = 0.0f;
+    tiempoDecisionIA      = 0.0f;
+    timerPostAtaqueRobert = 0.0f; //transicion
     robertAcabaDeAtacar   = false;
     teclaDPresionada      = false;
     teclaAPresionada      = false;
-    tiempoSiguienteOleada = 6.0f + static_cast<float>(
-                                QRandomGenerator::global()->bounded(3));
+    tiempoSiguienteOleada = INTERVALO_OLEADA_MIN + static_cast<float>(
+                                QRandomGenerator::global()->bounded(INTERVALO_OLEADA_VARIACION));// como funcionan las oleadas?
 }
 
 Nivel2::~Nivel2()
@@ -72,8 +94,8 @@ void Nivel2::iniciar()
     jugador1 = new Jugador(JUGADOR_NIVEL2);
     jugador2 = new Jugador(JUGADOR_NIVEL2);
 
-    jugador1->setVida(VIDA_ROBERT);
-    jugador2->setVida(VIDA_RHAEGAR);
+    jugador1->setVida(VIDA_ROBERT);//jugador 1
+    jugador2->setVida(VIDA_RHAEGAR); //jugador 2
     jugador1->setPosicion(200.0f, 0.0f, 0.0f);
     jugador2->setPosicion(700.0f, 0.0f, 0.0f);
 
@@ -82,12 +104,14 @@ void Nivel2::iniciar()
 
     finNivel              = false;
     iaActiva              = true;   // siempre arranca encendida
-    tiempoEscudo          = 0.0f;
+    tiempoEscudo1         = 0.0f;
+    tiempoEscudo2         = 0.0f;
     velEmpuje1            = 0.0f;
     velEmpuje2            = 0.0f;
     bloqueando1           = false;
     cooldownAtaque1       = 0.0f;
     cooldownAtaque2       = 0.0f;
+    tiempoDecisionIA      = 0.0f;
     timerPostAtaqueRobert = 0.0f;
     robertAcabaDeAtacar   = false;
     teclaDPresionada      = false;
@@ -96,8 +120,8 @@ void Nivel2::iniciar()
     for (auto* f : flechas) delete f;
     flechas.clear();
 
-    tiempoSiguienteOleada = 6.0f + static_cast<float>(
-                                QRandomGenerator::global()->bounded(3));
+    tiempoSiguienteOleada = INTERVALO_OLEADA_MIN + static_cast<float>(
+                                QRandomGenerator::global()->bounded(INTERVALO_OLEADA_VARIACION));
 }
 
 void Nivel2::keyPresado(int key)
@@ -161,29 +185,51 @@ void Nivel2::actualizar()
     // ---- IA: solo actualiza si esta activa ----
     if (iaActiva)
     {
-        ia.notificarBloqueoRobert(bloqueando1);
-        actualizarIA();
+        tiempoDecisionIA += dt;
+        if (tiempoDecisionIA >= INTERVALO_DECISION_IA)
+        {
+            ia.notificarBloqueoRobert(bloqueando1);
+            actualizarIA();
+        }
     }
 
     limitarJugador(jugador1);
     limitarJugador(jugador2);
 
-    tiempoEscudo += dt;
-    if (tiempoEscudo >= 15.0f)
+    if (jugador1->getEscudo() < ESCUDO_MAX)
     {
-        tiempoEscudo = 0.0f;
-        float e1 = jugador1->getEscudo() + 20.0f;
-        float e2 = jugador2->getEscudo() + 20.0f;
-        jugador1->setEscudo(e1 > ESCUDO_MAX ? ESCUDO_MAX : e1);
-        jugador2->setEscudo(e2 > ESCUDO_MAX ? ESCUDO_MAX : e2);
+        tiempoEscudo1 += dt;
+        if (tiempoEscudo1 >= intervaloRegeneracionEscudo(jugador1->getVida(), VIDA_ROBERT))
+        {
+            tiempoEscudo1 = 0.0f;
+            jugador1->setEscudo(jugador1->getEscudo() + ESCUDO_RECUPERACION);
+        }
+    }
+    else
+    {
+        tiempoEscudo1 = 0.0f;
+    }
+
+    if (jugador2->getEscudo() < ESCUDO_MAX)
+    {
+        tiempoEscudo2 += dt;
+        if (tiempoEscudo2 >= intervaloRegeneracionEscudo(jugador2->getVida(), VIDA_RHAEGAR))
+        {
+            tiempoEscudo2 = 0.0f;
+            jugador2->setEscudo(jugador2->getEscudo() + ESCUDO_RECUPERACION);
+        }
+    }
+    else
+    {
+        tiempoEscudo2 = 0.0f;
     }
 
     tiempoSiguienteOleada -= dt;
     if (tiempoSiguienteOleada <= 0.0f)
     {
         generarOleadaFlechas();
-        tiempoSiguienteOleada = 6.0f + static_cast<float>(
-                                    QRandomGenerator::global()->bounded(3));
+        tiempoSiguienteOleada = INTERVALO_OLEADA_MIN + static_cast<float>(
+                                    QRandomGenerator::global()->bounded(INTERVALO_OLEADA_VARIACION));
     }
 
     actualizarFlechas();
@@ -279,11 +325,14 @@ void Nivel2::actualizarIA()
 {
     if (!jugador1 || !jugador2) return;
 
+    float dtDecision = tiempoDecisionIA + dt;
+    tiempoDecisionIA = 0.0f;
+
     ia.actualizar(jugador2, jugador1,
                   jugador2->refVelY(),
                   jugador2->refEnSuelo(),
                   velEmpuje2, velEmpuje1,
-                  cooldownAtaque2, dt);
+                  cooldownAtaque2, dtDecision);
 
     if (velEmpuje1 >  MAX_VEL_EMPUJE) velEmpuje1 =  MAX_VEL_EMPUJE;
     if (velEmpuje1 < -MAX_VEL_EMPUJE) velEmpuje1 = -MAX_VEL_EMPUJE;
@@ -311,8 +360,12 @@ void Nivel2::generarOleadaFlechas()
                       QRandomGenerator::global()->bounded(
                           static_cast<int>(limiteDerecho - limiteIzquierdo)));
         float y  = -30.0f;
-        float vx = static_cast<float>(QRandomGenerator::global()->bounded(200)) - 100.0f;
-        float vy = 100.0f + static_cast<float>(QRandomGenerator::global()->bounded(151));
+        float vx = static_cast<float>(
+                       QRandomGenerator::global()->bounded(
+                           static_cast<int>(VELOCIDAD_FLECHA_X_MAX * 2.0f)))
+                   - VELOCIDAD_FLECHA_X_MAX;
+        float vy = VELOCIDAD_FLECHA_Y_MIN + static_cast<float>(
+                       QRandomGenerator::global()->bounded(VELOCIDAD_FLECHA_Y_VARIACION));
 
         flechas.push_back(new Obstaculo(x, y, vx, vy, true));
     }
@@ -366,7 +419,6 @@ void Nivel2::renderizar(QPainter& painter) { (void)painter; }
 bool     Nivel2::terminado()                  { return finNivel; }
 float    Nivel2::getVelocidadMundo() const    { return 0.0f; }
 void     Nivel2::manejarClick(int, int)       {}
-bool     Nivel2::pidioReinicio()     const    { return false; }
 bool     Nivel2::pidioSiguienteNivel() const  { return false; }
 Jugador* Nivel2::getJugador()                 { return jugador1; }
 Jugador* Nivel2::getJugador1()                { return jugador1; }

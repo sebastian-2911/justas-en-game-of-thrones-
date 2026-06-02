@@ -20,7 +20,6 @@ public:
     void  configurarMovimiento(float dt, float scroll) override;
     float getVelocidadMundo()                    const override;
     void  manejarClick(int x, int y)                   override;
-    bool  pidioReinicio()                        const override;
     bool  pidioSiguienteNivel()                  const override;
     Jugador* getJugador()                              override;
     Jugador* getJugador1();
@@ -47,7 +46,8 @@ private:
     bool    finNivel;
     bool    iaActiva;
     float   dt;
-    float   tiempoEscudo;
+    float   tiempoEscudo1;
+    float   tiempoEscudo2;
     float   limiteIzquierdo;
     float   limiteDerecho;
     float   velEmpuje1;
@@ -55,6 +55,7 @@ private:
     bool    bloqueando1;
     float   cooldownAtaque1;
     float   cooldownAtaque2;
+    float   tiempoDecisionIA;
     float   timerPostAtaqueRobert;
     bool    robertAcabaDeAtacar;
     std::vector<Obstaculo*> flechas;
@@ -64,6 +65,7 @@ private:
     static constexpr float MASA_ROBERT          =  2.0f;
     static constexpr float MASA_RHAEGAR         =  1.0f;
     static constexpr float ESCUDO_MAX           = 100.0f;
+    static constexpr float ESCUDO_RECUPERACION  =  20.0f;
     static constexpr float MAX_VEL_EMPUJE       = 1200.0f;
     static constexpr float FRICCION_EMPUJE      =   12.0f;
     static constexpr float UMBRAL_EMPUJE        =    8.0f;
@@ -80,6 +82,7 @@ private:
     static constexpr float RANGO_ATAQUE         =   30.0f;
     static constexpr float TIEMPO_HUIDA         =    0.5f;
     static constexpr float DIST_HUIDA           =  120.0f;
+    static constexpr float INTERVALO_DECISION_IA = 0.16f;
     void procesarTeclas();
     void actualizarIA();
     void limitarJugador(Jugador* j);

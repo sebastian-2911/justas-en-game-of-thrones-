@@ -17,9 +17,7 @@ public:
 
 private:
     bool  robertBloqueando;
-    float timerEspera;
     float timerBloqueo;
-    float timerRetroceso;
     float cooldownInterno;
     float timerSinAtaque;
     float timerPresion;

@@ -1,4 +1,3 @@
-// ========================== nivel1.cpp ==========================
 #include "entidad.h"
 #include "jugador.h"
 #include "nivel1.h"
@@ -13,14 +12,22 @@
 
 static constexpr float FASE_FIN_SPAWN   = 47.0f; // dejan de spawnear enemigos
 static constexpr float FASE_JEFE        = 50.0f; // jefe aparece + bloqueo central
-static constexpr float DURACION_NIVEL   = 60.0f; // fin por tiempo
+static constexpr float JEFE_Y_INICIAL   = -150.0f;
+static constexpr float JEFE_Y_COLISION  =  300.0f;
+static constexpr int CHOQUES_NORMAL     = 10;
+static constexpr int CHOQUES_DIFICIL    = 5;
+
+static int choquesParaPasar(Nivel1::Dificultad dificultad)
+{
+    return dificultad == Nivel1::NORMAL ? CHOQUES_NORMAL : CHOQUES_DIFICIL;
+}
 
 // --
 Nivel1::Nivel1(Dificultad dificultadSeleccionada)
 {
     dificultad = dificultadSeleccionada;
 
-    // NORMAL: i
+    // NORMAL:
     configs[NORMAL] =
         {
             1.8f,   // intervaloInicial
@@ -44,14 +51,13 @@ Nivel1::Nivel1(Dificultad dificultadSeleccionada)
     finNivel                 = false;
     finalActivo              = false;
     llegoAlFinal             = false;
-    perdioNivel              = false;
-    reinicioSolicitado       = false;
+    pasoPorChoques           = false;
     siguienteNivelSolicitado = false;
     jefeFinalActivo          = false;
     jugadorBloqueadoCentro   = false;
 
-    tiempoFinNivel            = 0.0f;
-    tiempoPerdidoPorColisiones = 0.0f;
+    tiempoFinNivel           = 0.0f;
+    choques                  = 0;
 
     dt          = 1.0f / 60.0f;
     scrollMundo = 0.0f;
@@ -83,19 +89,20 @@ void Nivel1::iniciar()
     obstaculos.clear();
 
     tiempoJuego               = 0.0f;
-    tiempoTotalNivel          = DURACION_NIVEL;
+    tiempoTotalNivel          = FASE_JEFE
+                                 + (JEFE_Y_COLISION - JEFE_Y_INICIAL)
+                                       / config.velocidadMundo;
     tiempoGeneracion          = 0.0f;
     tiempoAlerta              = 0.0f;
     tiempoFinNivel            = 0.0f;
-    tiempoPerdidoPorColisiones = 0.0f;
+    choques                   = 0;
 
     intervaloActual = config.intervaloInicial;
 
     finNivel                 = false;
     finalActivo              = false;
     llegoAlFinal             = false;
-    perdioNivel              = false;
-    reinicioSolicitado       = false;
+    pasoPorChoques           = false;
     siguienteNivelSolicitado = false;
     jefeFinalActivo          = false;
     jugadorBloqueadoCentro   = false;
@@ -122,8 +129,6 @@ void Nivel1::actualizar()
         {
             if (llegoAlFinal)
                 siguienteNivelSolicitado = true;
-            else
-                reinicioSolicitado = true;
         }
         return;
     }
@@ -140,15 +145,6 @@ void Nivel1::actualizar()
 
     if (tiempoAlerta > 0.0f)
         tiempoAlerta -= dt;
-
-    // ---- Derrota por penalizacion acumulada ----
-    if (tiempoPerdidoPorColisiones >= 30.0f)
-    {
-        perdioNivel    = true;
-        finNivel       = true;
-        tiempoFinNivel = 0.0f;
-        return;
-    }
 
     // ---- Fase jefe: activa a los 50 s ----
     if (tiempoJuego >= FASE_JEFE && !jefeFinalActivo)
@@ -178,15 +174,7 @@ void Nivel1::actualizar()
         return;
     }
 
-    // ---- Fin por tiempo sin haber tocado al jefe -> PIERDE ----
-    if (tiempoJuego >= DURACION_NIVEL)
-    {
-        if (!llegoAlFinal)
-            perdioNivel = true;
-
-        finNivel       = true;
-        tiempoFinNivel = 0.0f;
-    }
+    // El nivel 1 no tiene derrota por tiempo: termina al tocar el bloque naranja.
 }
 
 //
@@ -206,13 +194,14 @@ void Nivel1::renderizar(QPainter& painter)
 
     dibujarTemporizador(painter);
 
-    // HUD penalizacion
-    if (tiempoPerdidoPorColisiones > 0.0f)
+    // HUD choques
+    if (choques > 0)
     {
         painter.setPen(QColor(255, 80, 80));
         painter.setFont(QFont("Arial", 16, QFont::Bold));
-        QString txt = QString("Penalizacion: -%1s / -30s")
-                          .arg((int)tiempoPerdidoPorColisiones);
+        QString txt = QString("Choques: %1/%2")
+                          .arg(choques)
+                          .arg(choquesParaPasar(dificultad));
         painter.drawText(QRect(0, 60, 1024, 30), Qt::AlignCenter, txt);
     }
 
@@ -244,19 +233,31 @@ void Nivel1::manejarClick(int x, int y)
     {
         if (llegoAlFinal)
             siguienteNivelSolicitado = true;
-        else
-            reinicioSolicitado = true;
     }
 }
 
-bool Nivel1::pidioReinicio() const       { return reinicioSolicitado; }
 bool Nivel1::pidioSiguienteNivel() const { return siguienteNivelSolicitado; }
+bool Nivel1::aplicaDanioInicialNivel2() const { return llegoAlFinal && !pasoPorChoques; }
 bool Nivel1::terminado()                 { return finNivel; }
 Jugador* Nivel1::getJugador()            { return jugador; }
 
 
 void Nivel1::generarObstaculo()
 {
+    if (dificultad == NORMAL)
+    {
+        contadorPatron++;
+        if (contadorPatron >= 3)
+        {
+            contadorPatron = 0;
+            patronActual = rand() % 3;
+        }
+
+        float yReal = -80.0f - scrollMundo;
+        obstaculos.push_back(new Obstaculo(carriles[patronActual], yReal));
+        return;
+    }
+
     // Pares de carriles bloqueados para cada patron
     const int bloqueados[3][2] = {
         {1, 2},  // patron 0 → libre el 0
@@ -293,10 +294,18 @@ void Nivel1::verificarColisiones()
             // Sonido de daño
             sonidoDanio.play();
 
-            // Penalizacion de 5 s
-            tiempoPerdidoPorColisiones += 5.0f;
+            choques++;
             tiempoAlerta = 1.2f;
             o->desactivar();
+
+            if (choques >= choquesParaPasar(dificultad))
+            {
+                pasoPorChoques           = true;
+                siguienteNivelSolicitado = true;
+                finNivel                 = true;
+                tiempoFinNivel           = 0.0f;
+                return;
+            }
         }
     }
 }
@@ -368,14 +377,12 @@ void Nivel1::activarJefeFinal()
 
     // Coloca el jefe en la parte superior central de la pantalla
     xRealFinal = 462.0f;          // centrado en 1024 px (512 - 50)
-    yRealFinal = -150.0f - scrollMundo;
+    yRealFinal = JEFE_Y_INICIAL - scrollMundo;
 }
 
 
 void Nivel1::restarTiempo(float segundos)
 {
-    // Ya no se usa directamente, la penalizacion se acumula en
-    // tiempoPerdidoPorColisiones y provoca derrota al llegar a 30 s.
     (void)segundos;
 }
 
@@ -397,7 +404,7 @@ void Nivel1::dibujarTemporizador(QPainter& painter)
     {
         painter.setPen(Qt::yellow);
         painter.setFont(QFont("Arial", 18, QFont::Bold));
-        painter.drawText(QRect(0, 62, 1024, 32), Qt::AlignCenter, "-5 segundos");
+        painter.drawText(QRect(0, 62, 1024, 32), Qt::AlignCenter, "Choque");
     }
 }
 

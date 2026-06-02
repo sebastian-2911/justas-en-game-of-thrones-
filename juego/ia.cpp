@@ -2,9 +2,7 @@
 
 IA::IA()
     : robertBloqueando(false)
-    , timerEspera(0.0f)
     , timerBloqueo(0.0f)
-    , timerRetroceso(0.0f)
     , cooldownInterno(0.0f)
     , timerSinAtaque(0.0f)
     , timerPresion(0.0f)
@@ -36,9 +34,7 @@ void IA::actualizar(Jugador* rhaegar, Jugador* robert,
     accionBloqueo    = false;
     accionRetroceder = false;
 
-    if (timerEspera     > 0.0f) timerEspera     -= dt;
     if (timerBloqueo    > 0.0f) timerBloqueo    -= dt;
-    if (timerRetroceso  > 0.0f) timerRetroceso  -= dt;
     if (cooldownInterno > 0.0f) cooldownInterno -= dt;
     if (timerPresion    > 0.0f) timerPresion    -= dt;
     if (cooldownAtaque2 < cooldownInterno) cooldownInterno = cooldownAtaque2;
@@ -61,7 +57,6 @@ void IA::actualizar(Jugador* rhaegar, Jugador* robert,
     accionMoverDir = (diff >= 0.0f);
 
     bool puedeAtacar = !robertBloqueando
-                       && timerEspera     <= 0.0f
                        && cooldownInterno <= 0.0f;
 
     if (timerSinAtaque >= TIEMPO_OFENSIVA && vidaRhaegar > VIDA_BAJA)
@@ -264,7 +259,6 @@ void IA::actualizar(Jugador* rhaegar, Jugador* robert,
 
             cooldownInterno = cd;
             cooldownAtaque2 = cd;
-            timerEspera     = 0.08f + pausaExtra * 0.3f;
 
             float esc = robert->getEscudo();
             if (esc > 0.0f)
@@ -303,8 +297,6 @@ void IA::actualizar(Jugador* rhaegar, Jugador* robert,
             golpesConsecutivos = 0;
             pausaExtra += 0.06f;
             if (pausaExtra > 0.28f) pausaExtra = 0.28f;
-            timerEspera = 0.15f + pausaExtra;
-
             if (vidaRhaegar >= VIDA_BAJA)
             {
                 agresividad -= 0.02f;
@@ -329,7 +321,6 @@ void IA::notificarGolpeRecibido()
     if (golpesRecibidosSegidos >= 2 && timerBloqueo <= 0.0f)
     {
         timerBloqueo   = 0.20f;
-        timerRetroceso = 0.15f;
         golpesRecibidosSegidos = 0;
     }
 

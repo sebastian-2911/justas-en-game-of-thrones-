@@ -1,8 +1,7 @@
 #ifndef MAINWINDOW_H
 #define MAINWINDOW_H
 
-#include "nivel1.h"
-#include "nivel2.h"
+#include "juego.h"
 
 #include <QAudioOutput>
 #include <QMainWindow>
@@ -51,7 +50,7 @@ private:
     void renderizarNivel2(QPainter& painter);
 
     Ui::MainWindow* ui;
-    Nivel*          nivel;
+    Juego           juego;
     QTimer*         timer;
 
     // fondos
@@ -62,6 +61,8 @@ private:
     // estado general
     bool            menuActivo;
     bool            reproduciendo;
+    bool            cinematicaActiva;
+    bool            nivel1Ganado;
 
     // pantalla de carga nivel 1
     QPixmap            pantallaCargaN1;

@@ -25,7 +25,6 @@ public:
     // estado
     virtual bool terminado() = 0;
     virtual void manejarClick(int x, int y) = 0;
-    virtual bool pidioReinicio() const = 0;
     virtual bool pidioSiguienteNivel() const = 0;
 
     // conectar al jugador

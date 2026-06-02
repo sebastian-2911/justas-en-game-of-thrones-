@@ -36,8 +36,8 @@ public:
     void configurarMovimiento(float nuevoDt, float nuevoScroll);
     float getVelocidadMundo() const;
     void manejarClick(int x, int y);
-    bool pidioReinicio() const;
     bool pidioSiguienteNivel() const;
+    bool aplicaDanioInicialNivel2() const;
     bool terminado();
     Jugador* getJugador();
 
@@ -53,14 +53,14 @@ private:
 
 
     float tiempoJuego;
-    float tiempoTotalNivel;   // 60 s
+    float tiempoTotalNivel;
     float tiempoGeneracion;
     float tiempoAlerta;
     float tiempoFinNivel;
     float intervaloActual;
 
-    // ---- penalizacion -
-    float tiempoPerdidoPorColisiones; // derrota si >= 30 s
+    // ---- choques
+    int choques;
 
     // ---- fases
     bool jefeFinalActivo;
@@ -74,8 +74,7 @@ private:
     bool finNivel;
     bool finalActivo;
     bool llegoAlFinal;
-    bool perdioNivel;
-    bool reinicioSolicitado;
+    bool pasoPorChoques;
     bool siguienteNivelSolicitado;
 
     // ---- posicion del jefe ----

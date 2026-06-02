@@ -13,14 +13,36 @@
 float scrollMundo    = 0.0f;
 float velocidadMundo = 400.0f;
 
+static void dibujarPersonajeMovimiento(
+    QPainter& painter,
+    const QPixmap& sprites,
+    const QRect* recortes,
+    int totalFrames,
+    int frameActual,
+    const QRect& destino,
+    const QColor& colorRespaldo)
+{
+    if (!sprites.isNull() && recortes && totalFrames > 0)
+    {
+        int frame = frameActual % totalFrames;
+        painter.drawPixmap(destino, sprites, recortes[frame]);
+        return;
+    }
+
+    painter.setBrush(colorRespaldo);
+    painter.setPen(Qt::NoPen);
+    painter.drawRect(destino);
+}
+
 MainWindow::MainWindow(QWidget* parent)
     : QMainWindow(parent),
     ui(new Ui::MainWindow),
-    nivel(nullptr),
     timer(new QTimer(this)),
     fondoCargado(false),
     menuActivo(true),
     reproduciendo(false),
+    cinematicaActiva(false),
+    nivel1Ganado(false),
     mostrandoCargaN1(false),
     temporizadorCargaN1(0.0f),
     dificultadPendiente(Nivel1::NORMAL),
@@ -62,7 +84,6 @@ MainWindow::MainWindow(QWidget* parent)
 MainWindow::~MainWindow()
 {
     delete ui;
-    delete nivel;
 
     if (mediaPlayer)
     {
@@ -146,33 +167,6 @@ void MainWindow::cargarFondo()
         );
 }
 
-// ─── Helpers para detectar derrota/victoria en cada nivel
-
-static bool jugadorPerdioNivel1(Nivel* nivel)
-{
-    Nivel1* n1 = dynamic_cast<Nivel1*>(nivel);
-    if (!n1) return false;
-    return n1->pidioReinicio() && !n1->pidioSiguienteNivel();
-}
-
-static bool jugadorPerdioNivel2(Nivel* nivel)
-{
-    Nivel2* n2 = dynamic_cast<Nivel2*>(nivel);
-    if (!n2 || !n2->terminado()) return false;
-    Jugador* j1 = n2->getJugador1();
-    return j1 && j1->getVida() <= 0;
-}
-
-static bool jugadorGanoNivel2(Nivel* nivel)
-{
-    Nivel2* n2 = dynamic_cast<Nivel2*>(nivel);
-    if (!n2 || !n2->terminado()) return false;
-    Jugador* j1 = n2->getJugador1();
-    Jugador* j2 = n2->getJugador2();
-    // El jugador gana si j1 sigue vivo y j2 fue derrotado
-    return j1 && j1->getVida() > 0 && j2 && j2->getVida() <= 0;
-}
-
 // ─── Flujo nivel 1
 
 void MainWindow::iniciarNivel1(Nivel1::Dificultad dificultad)
@@ -181,6 +175,7 @@ void MainWindow::iniciarNivel1(Nivel1::Dificultad dificultad)
     mostrandoCargaN1    = true;
     temporizadorCargaN1 = 0.0f;
     menuActivo          = false;
+    nivel1Ganado        = false;
 }
 
 void MainWindow::mostrarPantallaCargaN1(Nivel1::Dificultad dificultad)
@@ -188,13 +183,10 @@ void MainWindow::mostrarPantallaCargaN1(Nivel1::Dificultad dificultad)
     musicaMenu.stop();
     musicaNivel1.play();
 
-    delete nivel;
-
-    nivel = new Nivel1(dificultad);
-    nivel->iniciar();
+    juego.iniciarNivel1(dificultad);
 
     scrollMundo    = 0.0f;
-    velocidadMundo = nivel->getVelocidadMundo();
+    velocidadMundo = juego.getVelocidadMundo();
 
     mostrandoCargaN1 = false;
 }
@@ -215,7 +207,8 @@ void MainWindow::iniciarCutscene()
 
 void MainWindow::reproducirCutscene()
 {
-    reproduciendo = true;
+    reproduciendo    = true;
+    cinematicaActiva = true;
     timer->stop();
 
     setStyleSheet("background-color: black;");
@@ -264,6 +257,7 @@ void MainWindow::onVideoTerminado(QMediaPlayer::PlaybackState state)
 
     setStyleSheet("");
     reproduciendo       = false;
+    cinematicaActiva    = false;
     mostrandoCargaN2    = true;
     temporizadorCargaN2 = 0.0f;
 
@@ -274,13 +268,14 @@ void MainWindow::onVideoTerminado(QMediaPlayer::PlaybackState state)
 
 void MainWindow::iniciarNivel2Real()
 {
-    delete nivel;
+    juego.iniciarNivel2();
 
-    nivel = new Nivel2();
-    nivel->iniciar();
+    Nivel2* nivel2 = juego.getNivel2();
+    if (nivel1Ganado && nivel2 && nivel2->getJugador2())
+        nivel2->getJugador2()->setVida(65.0f);
 
     scrollMundo    = 0.0f;
-    velocidadMundo = nivel->getVelocidadMundo();
+    velocidadMundo = juego.getVelocidadMundo();
 
     menuActivo       = false;
     mostrandoCargaN2 = false;
@@ -293,10 +288,10 @@ void MainWindow::reproducirVideoFinal()
     musicaNivel1.stop();
     musicaNivel2.stop();
 
-    delete nivel;
-    nivel = nullptr;
+    juego.limpiarNivel();
 
     reproduciendo       = true;
+    cinematicaActiva    = true;
     mostrandoVideoFinal = true;
     timer->stop();
 
@@ -346,6 +341,7 @@ void MainWindow::onVideoFinalTerminado(QMediaPlayer::PlaybackState state)
 
     setStyleSheet("");
     reproduciendo       = false;
+    cinematicaActiva    = false;
     mostrandoVideoFinal = false;
 
     // Al terminar el video final volvemos al menú
@@ -361,8 +357,7 @@ void MainWindow::mostrarPantallaPerdedor()
     musicaNivel1.stop();
     musicaNivel2.stop();
 
-    delete nivel;
-    nivel = nullptr;
+    juego.limpiarNivel();
 
     scrollMundo           = 0.0f;
     mostrandoPerdedor     = true;
@@ -376,14 +371,15 @@ void MainWindow::volverAlMenu()
     musicaNivel1.stop();
     musicaNivel2.stop();
 
-    delete nivel;
+    juego.limpiarNivel();
 
-    nivel       = nullptr;
     scrollMundo = 0.0f;
     menuActivo  = true;
 
     mostrandoPerdedor   = false;
     mostrandoVideoFinal = false;
+    cinematicaActiva    = false;
+    nivel1Ganado        = false;
 
     musicaMenu.play();
 }
@@ -449,35 +445,27 @@ void MainWindow::loop()
     float dt = 1.0f / 60.0f;
     scrollMundo += velocidadMundo * dt;
 
-    nivel->configurarMovimiento(dt, scrollMundo);
-    nivel->actualizar();
+    Juego::ResultadoActualizacion resultado = juego.actualizar(dt, scrollMundo);
 
-    // ── Detectar victoria nivel 2
-    if (jugadorGanoNivel2(nivel))
+    if (resultado == Juego::VictoriaNivel2)
     {
         reproducirVideoFinal();
         update();
         return;
     }
 
-    // ── Detectar derrota (nivel 1 o nivel 2)
-    if (jugadorPerdioNivel1(nivel) || jugadorPerdioNivel2(nivel))
+    if (resultado == Juego::Derrota)
     {
         mostrarPantallaPerdedor();
         update();
         return;
     }
 
-    // Avanzar al siguiente nivel
-    if (nivel->pidioSiguienteNivel())
+    if (resultado == Juego::SiguienteNivel)
     {
+        Nivel1* nivel1 = dynamic_cast<Nivel1*>(juego.getNivel());
+        nivel1Ganado = nivel1 && nivel1->aplicaDanioInicialNivel2();
         iniciarNivel2();
-        return;
-    }
-
-    if (nivel->pidioReinicio())
-    {
-        volverAlMenu();
         return;
     }
 
@@ -488,7 +476,7 @@ void MainWindow::loop()
 
 void MainWindow::renderizarNivel2(QPainter& painter)
 {
-    Nivel2* nivel2 = dynamic_cast<Nivel2*>(nivel);
+    Nivel2* nivel2 = juego.getNivel2();
     if (!nivel2) return;
 
     if (nivel2->isFondoCargado())
@@ -507,8 +495,14 @@ void MainWindow::renderizarNivel2(QPainter& painter)
         Vector3 pos = j1->getPosicion();
         int screenX = static_cast<int>(pos.x);
         int screenY = 450 + static_cast<int>(pos.y);
-        painter.setBrush(Qt::blue);
-        painter.drawRect(screenX, screenY, 60, 100);
+        dibujarPersonajeMovimiento(
+            painter,
+            QPixmap(),
+            nullptr,
+            0,
+            0,
+            QRect(screenX, screenY, 60, 100),
+            Qt::blue);
     }
 
     if (j2)
@@ -516,8 +510,14 @@ void MainWindow::renderizarNivel2(QPainter& painter)
         Vector3 pos = j2->getPosicion();
         int screenX = static_cast<int>(pos.x);
         int screenY = 450 + static_cast<int>(pos.y);
-        painter.setBrush(Qt::red);
-        painter.drawRect(screenX, screenY, 60, 100);
+        dibujarPersonajeMovimiento(
+            painter,
+            QPixmap(),
+            nullptr,
+            0,
+            0,
+            QRect(screenX, screenY, 60, 100),
+            Qt::red);
     }
 
     painter.setPen(Qt::NoPen);
@@ -661,7 +661,8 @@ void MainWindow::paintEvent(QPaintEvent*)
     if (reproduciendo)
         return;
 
-    Nivel2* nivel2 = dynamic_cast<Nivel2*>(nivel);
+    Nivel* nivel = juego.getNivel();
+    Nivel2* nivel2 = juego.getNivel2();
 
     if (!nivel2 && fondoCargado)
     {
@@ -701,6 +702,9 @@ void MainWindow::keyPressEvent(QKeyEvent* event)
 {
     if (reproduciendo)
     {
+        if (cinematicaActiva && event->key() == Qt::Key_S && mediaPlayer)
+            mediaPlayer->stop();
+
         if (event->key() == Qt::Key_Escape && mediaPlayer)
             mediaPlayer->stop();
         return;
@@ -709,59 +713,17 @@ void MainWindow::keyPressEvent(QKeyEvent* event)
     if (mostrandoCargaN1 || mostrandoEntreNiveles || mostrandoCargaN2 || mostrandoPerdedor)
         return;
 
-    if (menuActivo || !nivel)
+    if (menuActivo || !juego.tieneNivel())
         return;
 
-    Nivel2* nivel2 = dynamic_cast<Nivel2*>(nivel);
-
-    if (nivel2)
-    {
-        if (event->key() == Qt::Key_A)
-            nivel2->keyPresado(Qt::Key_A);
-
-        if (event->key() == Qt::Key_D)
-            nivel2->keyPresado(Qt::Key_D);
-
-        if (event->key() == Qt::Key_W)
-            nivel2->keyPresado(Qt::Key_W);
-
-        if (event->key() == Qt::Key_Z)
-            nivel2->ataqueJugador();
-
-        if (event->key() == Qt::Key_X)
-            nivel2->bloqueoJugador(true);
-
-        if (event->key() == Qt::Key_I)
-            nivel2->setIAActiva(!nivel2->getIAActiva());
-
-        return;
-    }
-
-    Jugador* j = nivel->getJugador();
-    if (!j) return;
-
-    if (event->key() == Qt::Key_A)
-        j->procesarInput('a');
-
-    if (event->key() == Qt::Key_D)
-        j->procesarInput('d');
+    juego.manejarTeclaPresionada(event->key());
 }
 
 void MainWindow::keyReleaseEvent(QKeyEvent* event)
 {
-    if (menuActivo || !nivel) return;
+    if (menuActivo || !juego.tieneNivel()) return;
 
-    Nivel2* nivel2 = dynamic_cast<Nivel2*>(nivel);
-    if (!nivel2) return;
-
-    if (event->key() == Qt::Key_A)
-        nivel2->keySoltado(Qt::Key_A);
-
-    if (event->key() == Qt::Key_D)
-        nivel2->keySoltado(Qt::Key_D);
-
-    if (event->key() == Qt::Key_X)
-        nivel2->bloqueoJugador(false);
+    juego.manejarTeclaSoltada(event->key());
 }
 
 void MainWindow::mousePressEvent(QMouseEvent* event)
@@ -783,9 +745,9 @@ void MainWindow::mousePressEvent(QMouseEvent* event)
         return;
     }
 
-    if (!nivel)
+    if (!juego.tieneNivel())
         return;
 
-    nivel->manejarClick(x, y);
+    juego.manejarClick(x, y);
 }
 
