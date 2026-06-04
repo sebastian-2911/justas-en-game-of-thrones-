@@ -224,12 +224,16 @@ void IA::actualizar(Jugador* rhaegar, Jugador* robert,
         float dir = accionMoverDir ? -1.0f : 1.0f;
         pos.x += dir * velActual * dt;
         rhaegar->setPosicion(pos.x, pos.y, pos.z);
+        rhaegar->mirarHaciaDerecha(dir > 0.0f);
+        rhaegar->setEstadoAnimacion(ANIM_CAMINAR);
     }
     else if (accionMover)
     {
         float dir = accionMoverDir ? 1.0f : -1.0f;
         pos.x += dir * velActual * dt;
         rhaegar->setPosicion(pos.x, pos.y, pos.z);
+        rhaegar->mirarHaciaDerecha(dir > 0.0f);
+        rhaegar->setEstadoAnimacion(ANIM_CAMINAR);
     }
 
     if (accionSaltar && enSuelo2)
@@ -242,6 +246,8 @@ void IA::actualizar(Jugador* rhaegar, Jugador* robert,
     {
         pr = rhaegar->getPosicion();
         pb = robert->getPosicion();
+        rhaegar->mirarHaciaDerecha(pb.x >= pr.x);
+        rhaegar->setEstadoAnimacion(ANIM_ATAQUE);
 
         float l2 = pr.x,       r2 = pr.x + 60.0f;
         float l1 = pb.x,       r1 = pb.x + 60.0f;
@@ -266,6 +272,7 @@ void IA::actualizar(Jugador* rhaegar, Jugador* robert,
             else
                 robert->setVida(robert->getVida() - 30.0f < 0.0f
                                     ? 0.0f : robert->getVida() - 30.0f);
+            robert->setEstadoAnimacion(ANIM_GOLPE);
 
             float dir       = (pb.x >= pr.x) ? 1.0f : -1.0f;
             float masaTotal = MASA_R1 + MASA_R2;

@@ -91,13 +91,15 @@ void Nivel2::iniciar()
     delete jugador1;
     delete jugador2;
 
-    jugador1 = new Jugador(JUGADOR_NIVEL2);
-    jugador2 = new Jugador(JUGADOR_NIVEL2);
+    jugador1 = new Jugador(JUGADOR_NIVEL2_ROBERT);
+    jugador2 = new Jugador(JUGADOR_NIVEL2_TARGERYAN);
 
     jugador1->setVida(VIDA_ROBERT);//jugador 1
     jugador2->setVida(VIDA_RHAEGAR); //jugador 2
     jugador1->setPosicion(200.0f, 0.0f, 0.0f);
     jugador2->setPosicion(700.0f, 0.0f, 0.0f);
+    jugador1->mirarHaciaDerecha(true);
+    jugador2->mirarHaciaDerecha(false);
 
     fondoCargado = fondo.load(":/fondo-nevel2.png");
     pisoCargado  = piso.load(":/piso.png");
@@ -244,13 +246,16 @@ void Nivel2::ataqueJugador()
     if (!jugador1 || !jugador2) return;
     if (cooldownAtaque1 > 0.0f) return;
 
+    // Activar animación de ataque en jugador1
+    jugador1->setEstadoAnimacion(ANIM_ATAQUE);
+
     Vector3 p1 = jugador1->getPosicion();
     Vector3 p2 = jugador2->getPosicion();
 
     float diff    = p2.x - p1.x;
     float absDist = diff < 0.0f ? -diff : diff;
 
-    if (absDist > HITBOX_W + RANGO_ATAQUE) return;
+    if (absDist > 200.0f) return;  // rango ajustado al ancho visual del sprite (240px)
 
     cooldownAtaque1 = COOLDOWN_ATAQUE;
 
@@ -265,6 +270,7 @@ void Nivel2::ataqueJugador()
         jugador2->setVida(jugador2->getVida() - DANIO_VIDA);
 
     ia.notificarGolpeRecibido();
+    jugador2->setEstadoAnimacion(ANIM_GOLPE);   // animación de golpe recibido
     robertAcabaDeAtacar   = true;
     timerPostAtaqueRobert = TIEMPO_HUIDA;
 
@@ -284,6 +290,10 @@ void Nivel2::ataqueJugador()
 void Nivel2::bloqueoJugador(bool activo)
 {
     bloqueando1 = activo;
+    if (activo)
+        jugador1->setEstadoAnimacion(ANIM_BLOQUEO);
+    else
+        jugador1->setEstadoAnimacion(ANIM_CAMINAR);
     if (!activo) jugador1->frenar();
 }
 
@@ -328,16 +338,33 @@ void Nivel2::actualizarIA()
     float dtDecision = tiempoDecisionIA + dt;
     tiempoDecisionIA = 0.0f;
 
+    float xAntesIA = jugador2->getPosicion().x;
+
     ia.actualizar(jugador2, jugador1,
                   jugador2->refVelY(),
                   jugador2->refEnSuelo(),
                   velEmpuje2, velEmpuje1,
                   cooldownAtaque2, dtDecision);
 
+    bool iaSeMovio = std::abs(jugador2->getPosicion().x - xAntesIA) > 0.1f;
+
     if (velEmpuje1 >  MAX_VEL_EMPUJE) velEmpuje1 =  MAX_VEL_EMPUJE;
     if (velEmpuje1 < -MAX_VEL_EMPUJE) velEmpuje1 = -MAX_VEL_EMPUJE;
     if (velEmpuje2 >  MAX_VEL_EMPUJE) velEmpuje2 =  MAX_VEL_EMPUJE;
     if (velEmpuje2 < -MAX_VEL_EMPUJE) velEmpuje2 = -MAX_VEL_EMPUJE;
+
+    // ── Sincronizar animación de la IA con su estado ────────
+    // Solo cambiar si no está en medio de un golpe o ataque
+    EstadoAnimacion animActual = jugador2->getEstadoAnimacion();
+    bool animacionActiva = (animActual == ANIM_ATAQUE || animActual == ANIM_GOLPE);
+
+    if (!animacionActiva)
+    {
+        if (ia.quiereBloquear())
+            jugador2->setEstadoAnimacion(ANIM_BLOQUEO);
+        else if (iaSeMovio)
+            jugador2->setEstadoAnimacion(ANIM_CAMINAR);
+    }
 
     (void)ia.quiereBloquear();
 }
@@ -405,6 +432,7 @@ void Nivel2::comprobarColisionesFlechas()
                 float esc = j->getEscudo();
                 if (esc > 0.0f) j->setEscudo(esc - DANIO_FLECHA);
                 else            j->setVida(j->getVida() - DANIO_FLECHA);
+                j->setEstadoAnimacion(ANIM_GOLPE);   // feedback visual de impacto
                 f->desactivar();
             }
         };

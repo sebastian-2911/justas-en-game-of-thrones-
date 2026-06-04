@@ -13,27 +13,6 @@
 float scrollMundo    = 0.0f;
 float velocidadMundo = 400.0f;
 
-static void dibujarPersonajeMovimiento(
-    QPainter& painter,
-    const QPixmap& sprites,
-    const QRect* recortes,
-    int totalFrames,
-    int frameActual,
-    const QRect& destino,
-    const QColor& colorRespaldo)
-{
-    if (!sprites.isNull() && recortes && totalFrames > 0)
-    {
-        int frame = frameActual % totalFrames;
-        painter.drawPixmap(destino, sprites, recortes[frame]);
-        return;
-    }
-
-    painter.setBrush(colorRespaldo);
-    painter.setPen(Qt::NoPen);
-    painter.drawRect(destino);
-}
-
 MainWindow::MainWindow(QWidget* parent)
     : QMainWindow(parent),
     ui(new Ui::MainWindow),
@@ -234,12 +213,48 @@ void MainWindow::reproducirCutscene()
         &MainWindow::onVideoTerminado
         );
 
+    connect(
+        mediaPlayer,
+        &QMediaPlayer::mediaStatusChanged,
+        this,
+        &MainWindow::onVideoEstadoCambiado
+        );
+
+    connect(
+        mediaPlayer,
+        &QMediaPlayer::errorOccurred,
+        this,
+        &MainWindow::onVideoError
+        );
+
     mediaPlayer->play();
 }
 
 void MainWindow::onVideoTerminado(QMediaPlayer::PlaybackState state)
 {
     if (state != QMediaPlayer::StoppedState)
+        return;
+
+    finalizarCutscene();
+}
+
+void MainWindow::onVideoEstadoCambiado(QMediaPlayer::MediaStatus status)
+{
+    if (status == QMediaPlayer::EndOfMedia || status == QMediaPlayer::InvalidMedia)
+        finalizarCutscene();
+}
+
+void MainWindow::onVideoError(QMediaPlayer::Error error, const QString& errorString)
+{
+    (void)errorString;
+
+    if (error != QMediaPlayer::NoError)
+        finalizarCutscene();
+}
+
+void MainWindow::finalizarCutscene()
+{
+    if (!cinematicaActiva || mostrandoVideoFinal)
         return;
 
     if (videoWidget)
@@ -477,114 +492,118 @@ void MainWindow::loop()
 void MainWindow::renderizarNivel2(QPainter& painter)
 {
     Nivel2* nivel2 = juego.getNivel2();
-    if (!nivel2) return;
+    if (!nivel2)
+        return;
 
+    dibujarEscenarioNivel2(painter, nivel2);
+    dibujarPersonajesNivel2(painter, nivel2);
+    dibujarFlechasNivel2(painter, nivel2);
+    dibujarResultadoNivel2(painter, nivel2);
+    dibujarHudNivel2(painter, nivel2);
+}
+
+void MainWindow::dibujarEscenarioNivel2(QPainter& painter, Nivel2* nivel2)
+{
     if (nivel2->isFondoCargado())
         painter.drawPixmap(0, 0, 1024, 768, nivel2->getFondo());
+    else
+        painter.fillRect(0, 0, 1024, 768, QColor(26, 29, 35));
 
-    if (nivel2->isPisoCargado())
-        painter.drawPixmap(0, 550, 1024, 220, nivel2->getPiso());
+}
 
+void MainWindow::dibujarPersonajesNivel2(QPainter& painter, Nivel2* nivel2)
+{
     Jugador* j1 = nivel2->getJugador1();
     Jugador* j2 = nivel2->getJugador2();
 
-    painter.setPen(Qt::NoPen);
-
     if (j1)
-    {
-        Vector3 pos = j1->getPosicion();
-        int screenX = static_cast<int>(pos.x);
-        int screenY = 450 + static_cast<int>(pos.y);
-        dibujarPersonajeMovimiento(
-            painter,
-            QPixmap(),
-            nullptr,
-            0,
-            0,
-            QRect(screenX, screenY, 60, 100),
-            Qt::blue);
-    }
+        j1->renderizar(painter);
 
     if (j2)
-    {
-        Vector3 pos = j2->getPosicion();
-        int screenX = static_cast<int>(pos.x);
-        int screenY = 450 + static_cast<int>(pos.y);
-        dibujarPersonajeMovimiento(
-            painter,
-            QPixmap(),
-            nullptr,
-            0,
-            0,
-            QRect(screenX, screenY, 60, 100),
-            Qt::red);
-    }
+        j2->renderizar(painter);
+}
 
+void MainWindow::dibujarFlechasNivel2(QPainter& painter, Nivel2* nivel2)
+{
     painter.setPen(Qt::NoPen);
     for (auto* f : nivel2->getFlechas())
-        f->renderizar(painter);
-
-    if (nivel2->terminado())
     {
-        painter.setPen(Qt::white);
-        painter.setFont(QFont("Arial", 40, QFont::Bold));
-
-        if (j1 && j1->getVida() <= 0)
-            painter.drawText(330, 200, "GANA IA");
-        else
-            painter.drawText(300, 200, "GANASTE");
+        if (f)
+            f->renderizar(painter);
     }
+}
 
-    const int BARRA_W  = 380;
-    const int BARRA_H  = 16;
-    const int BARRA_Y1 = 20;
-    const int BARRA_Y2 = 42;
-    const int MARGEN   = 20;
+void MainWindow::dibujarResultadoNivel2(QPainter& painter, Nivel2* nivel2)
+{
+    if (!nivel2->terminado())
+        return;
+
+    Jugador* j1 = nivel2->getJugador1();
+
+    painter.setPen(Qt::white);
+    painter.setFont(QFont("Arial", 40, QFont::Bold));
+
+    if (j1 && j1->getVida() <= 0)
+        painter.drawText(330, 200, "GANA IA");
+    else
+        painter.drawText(300, 200, "GANASTE");
+}
+
+void MainWindow::dibujarHudNivel2(QPainter& painter, Nivel2* nivel2)
+{
+    Jugador* j1 = nivel2->getJugador1();
+    Jugador* j2 = nivel2->getJugador2();
+
+    const int barraW  = 380;
+    const int barraH  = 16;
+    const int barraY1 = 20;
+    const int barraY2 = 42;
+    const int margen  = 20;
 
     painter.setPen(Qt::NoPen);
 
     if (j1)
     {
         painter.setBrush(QColor(60, 60, 60));
-        painter.drawRect(MARGEN, BARRA_Y1, BARRA_W, BARRA_H);
-        painter.drawRect(MARGEN, BARRA_Y2, BARRA_W, BARRA_H);
+        painter.drawRect(margen, barraY1, barraW, barraH);
+        painter.drawRect(margen, barraY2, barraW, barraH);
 
-        int vidaW1 = static_cast<int>(j1->getVida() / 100.0f * BARRA_W);
+        int vidaW1 = static_cast<int>(j1->getVida() / 100.0f * barraW);
         painter.setBrush(QColor(200, 30, 30));
-        painter.drawRect(MARGEN, BARRA_Y1, vidaW1, BARRA_H);
+        painter.drawRect(margen, barraY1, vidaW1, barraH);
 
-        int escudoW1 = static_cast<int>(j1->getEscudo() / 100.0f * BARRA_W);
+        int escudoW1 = static_cast<int>(j1->getEscudo() / 100.0f * barraW);
         painter.setBrush(QColor(30, 100, 220));
-        painter.drawRect(MARGEN, BARRA_Y2, escudoW1, BARRA_H);
+        painter.drawRect(margen, barraY2, escudoW1, barraH);
 
         painter.setPen(Qt::white);
         painter.setFont(QFont("Arial", 10, QFont::Bold));
-        painter.drawText(MARGEN, BARRA_Y1 - 4, "JUGADOR");
+        painter.drawText(margen, barraY1 - 4, "JUGADOR");
         painter.setPen(Qt::NoPen);
     }
 
     if (j2)
     {
-        int xDerecha = 1024 - MARGEN - BARRA_W;
+        int xDerecha = 1024 - margen - barraW;
 
         painter.setBrush(QColor(60, 60, 60));
-        painter.drawRect(xDerecha, BARRA_Y1, BARRA_W, BARRA_H);
-        painter.drawRect(xDerecha, BARRA_Y2, BARRA_W, BARRA_H);
+        painter.drawRect(xDerecha, barraY1, barraW, barraH);
+        painter.drawRect(xDerecha, barraY2, barraW, barraH);
 
-        int vidaW2   = static_cast<int>(j2->getVida()   / 100.0f * BARRA_W);
-        int escudoW2 = static_cast<int>(j2->getEscudo() / 100.0f * BARRA_W);
+        int vidaW2   = static_cast<int>(j2->getVida()   / 100.0f * barraW);
+        int escudoW2 = static_cast<int>(j2->getEscudo() / 100.0f * barraW);
 
         painter.setBrush(QColor(200, 30, 30));
-        painter.drawRect(1024 - MARGEN - vidaW2, BARRA_Y1, vidaW2, BARRA_H);
+        painter.drawRect(1024 - margen - vidaW2, barraY1, vidaW2, barraH);
 
         painter.setBrush(QColor(30, 100, 220));
-        painter.drawRect(1024 - MARGEN - escudoW2, BARRA_Y2, escudoW2, BARRA_H);
+        painter.drawRect(1024 - margen - escudoW2, barraY2, escudoW2, barraH);
 
         painter.setPen(Qt::white);
         painter.setFont(QFont("Arial", 10, QFont::Bold));
         QFontMetrics fm(painter.font());
         int textoW = fm.horizontalAdvance("IA");
-        painter.drawText(1024 - MARGEN - textoW, BARRA_Y1 - 4, "IA");
+        painter.drawText(1024 - margen - textoW, barraY1 - 4, "IA");
         painter.setPen(Qt::NoPen);
     }
 }

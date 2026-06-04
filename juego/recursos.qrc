@@ -15,5 +15,7 @@
         <file>cancion n2.wav</file>
         <file>cancion nivel1.wav</file>
         <file>final.mp4</file>
+        <file>spritesTargeryan.png</file>
+        <file>spritesRobert.png</file>
     </qresource>
 </RCC>

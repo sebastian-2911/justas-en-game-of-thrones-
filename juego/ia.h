@@ -43,16 +43,16 @@ private:
     static constexpr float DIST_LEJOS      = 190.0f;
     static constexpr float VIDA_BAJA       =  40.0f;
     static constexpr float VIDA_CRITICA    =  20.0f;
-    static constexpr float VEL_NORMAL      = 460.0f;
-    static constexpr float VEL_RAPIDA      = 530.0f;
-    static constexpr float VEL_PRESION     = 570.0f;
-    static constexpr float VEL_DESESPERADA = 600.0f;
+    static constexpr float VEL_NORMAL      = 320.0f;
+    static constexpr float VEL_RAPIDA      = 370.0f;
+    static constexpr float VEL_PRESION     = 400.0f;
+    static constexpr float VEL_DESESPERADA = 420.0f;
     static constexpr float FUERZA_SALTO    = -720.0f;
     static constexpr float FUERZA_EMPUJE   = 700.0f;
     static constexpr float MASA_R1         =   2.0f;
     static constexpr float MASA_R2         =   1.0f;
-    static constexpr float COOLDOWN_BASE   =   0.18f;
-    static constexpr float PROB_ERROR      =   0.06f;
+    static constexpr float COOLDOWN_BASE   =   0.24f;
+    static constexpr float PROB_ERROR      =   0.15f;
     static constexpr float TIEMPO_OFENSIVA =   3.0f;
 };
 #endif // IA_H

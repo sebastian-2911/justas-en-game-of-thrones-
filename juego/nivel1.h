@@ -89,7 +89,7 @@ private:
     QRect botonReiniciar;
 
     // ---- carriles
-    const float carriles[3] = { -1.5f, 0.0f, 1.5f };
+    const float carriles[3] = { -1.3f, 0.0f, 1.0f };
 
     // ---- sonido daño ----
     QSoundEffect sonidoDanio;

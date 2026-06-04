@@ -33,6 +33,8 @@ protected:
 private slots:
     void loop();
     void onVideoTerminado(QMediaPlayer::PlaybackState state);
+    void onVideoEstadoCambiado(QMediaPlayer::MediaStatus status);
+    void onVideoError(QMediaPlayer::Error error, const QString& errorString);
     void onVideoFinalTerminado(QMediaPlayer::PlaybackState state);
 
 private:
@@ -43,11 +45,17 @@ private:
     void iniciarCutscene();
     void iniciarNivel2Real();
     void reproducirCutscene();
+    void finalizarCutscene();
     void reproducirVideoFinal();
     void mostrarPantallaPerdedor();
     void volverAlMenu();
     void dibujarMenu(QPainter& painter);
     void renderizarNivel2(QPainter& painter);
+    void dibujarEscenarioNivel2(QPainter& painter, Nivel2* nivel2);
+    void dibujarPersonajesNivel2(QPainter& painter, Nivel2* nivel2);
+    void dibujarFlechasNivel2(QPainter& painter, Nivel2* nivel2);
+    void dibujarResultadoNivel2(QPainter& painter, Nivel2* nivel2);
+    void dibujarHudNivel2(QPainter& painter, Nivel2* nivel2);
 
     Ui::MainWindow* ui;
     Juego           juego;

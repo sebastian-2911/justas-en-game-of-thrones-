@@ -90,8 +90,8 @@ void Nivel1::iniciar()
 
     tiempoJuego               = 0.0f;
     tiempoTotalNivel          = FASE_JEFE
-                                 + (JEFE_Y_COLISION - JEFE_Y_INICIAL)
-                                       / config.velocidadMundo;
+                       + (JEFE_Y_COLISION - JEFE_Y_INICIAL)
+                             / config.velocidadMundo;
     tiempoGeneracion          = 0.0f;
     tiempoAlerta              = 0.0f;
     tiempoFinNivel            = 0.0f;
