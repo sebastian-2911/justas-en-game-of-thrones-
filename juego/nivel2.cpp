@@ -3,7 +3,7 @@
 #include <cmath>
 
 static const float VIDA_ROBERT  = 130.0f;
-static const float VIDA_RHAEGAR =  85.0f;
+static const float VIDA_RHAEGAR =  105.0f;
 static const float INTERVALO_OLEADA_MIN = 3.0f;
 static const int   INTERVALO_OLEADA_VARIACION = 2;
 static const float VELOCIDAD_FLECHA_X_MAX = 160.0f;
@@ -70,7 +70,7 @@ Nivel2::Nivel2()
     cooldownAtaque1       = 0.0f;
     cooldownAtaque2       = 0.0f;
     tiempoDecisionIA      = 0.0f;
-    timerPostAtaqueRobert = 0.0f; //transicion
+    timerPostAtaqueRobert = 1.0f; //transicion
     robertAcabaDeAtacar   = false;
     teclaDPresionada      = false;
     teclaAPresionada      = false;

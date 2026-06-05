@@ -3,12 +3,13 @@
 
 #include "jugador.h"
 #include "obstaculo.h"
+#include "nivel.h"
+
 #include <QPainter>
 #include <QRect>
 #include <QSoundEffect>
 #include <QUrl>
 #include <vector>
-#include "nivel.h"
 
 class Nivel1 : public Nivel
 {
@@ -30,16 +31,17 @@ public:
     Nivel1(Dificultad dificultadSeleccionada = NORMAL);
     ~Nivel1();
 
-    void iniciar();
-    void actualizar();
-    void renderizar(QPainter& painter);
-    void configurarMovimiento(float nuevoDt, float nuevoScroll);
-    float getVelocidadMundo() const;
-    void manejarClick(int x, int y);
-    bool pidioSiguienteNivel() const;
+    void  iniciar()                              override;
+    void  actualizar()                           override;
+    void  renderizar(QPainter& painter)          override;
+    void  configurarMovimiento(float nuevoDt, float nuevoScroll) override;
+    float getVelocidadMundo() const              override;
+    void  manejarClick(int x, int y)             override;
+    bool  terminado()                            override;
+    Jugador* getJugador()                        override;
+
+    bool pidioSiguienteNivel()    const;
     bool aplicaDanioInicialNivel2() const;
-    bool terminado();
-    Jugador* getJugador();
 
 private:
     // ---- entidades ----
@@ -51,7 +53,6 @@ private:
     ConfigDificultad config;
     ConfigDificultad configs[2];
 
-
     float tiempoJuego;
     float tiempoTotalNivel;
     float tiempoGeneracion;
@@ -59,14 +60,14 @@ private:
     float tiempoFinNivel;
     float intervaloActual;
 
-    // ---- choques
+    // ---- choques ----
     int choques;
 
-    // ---- fases
+    // ---- fases ----
     bool jefeFinalActivo;
     bool jugadorBloqueadoCentro;
 
-    // ---- movimiento mundo
+    // ---- movimiento mundo ----
     float dt;
     float scrollMundo;
 
@@ -81,14 +82,13 @@ private:
     float xRealFinal;
     float yRealFinal;
 
-
     int patronActual;
     int contadorPatron;
 
-    // ---- ui
+    // ---- ui ----
     QRect botonReiniciar;
 
-    // ---- carriles
+    // ---- carriles ----
     const float carriles[3] = { -1.3f, 0.0f, 1.0f };
 
     // ---- sonido daño ----

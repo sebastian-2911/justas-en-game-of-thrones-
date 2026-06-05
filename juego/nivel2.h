@@ -64,7 +64,7 @@ private:
     bool teclaAPresionada;
     static constexpr float MASA_ROBERT          =  2.0f;
     static constexpr float MASA_RHAEGAR         =  1.0f;
-    static constexpr float ESCUDO_MAX           = 100.0f;
+    static constexpr float ESCUDO_MAX           = 130.0f;
     static constexpr float ESCUDO_RECUPERACION  =  20.0f;
     static constexpr float MAX_VEL_EMPUJE       = 1200.0f;
     static constexpr float FRICCION_EMPUJE      =   12.0f;
