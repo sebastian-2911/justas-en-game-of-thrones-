@@ -1,3 +1,4 @@
+
 #include "entidad.h"
 #include "jugador.h"
 #include "nivel1.h"
@@ -10,8 +11,8 @@
 #include <QUrl>
 
 
-static constexpr float FASE_FIN_SPAWN   = 47.0f;
-static constexpr float FASE_JEFE        = 50.0f;
+    static constexpr float FASE_FIN_SPAWN   = 47.0f; // dejan de spawnear enemigos
+static constexpr float FASE_JEFE        = 50.0f; // jefe aparece + bloqueo central
 static constexpr float JEFE_Y_INICIAL   = -150.0f;
 static constexpr float JEFE_Y_COLISION  =  300.0f;
 static constexpr int CHOQUES_NORMAL     = 10;
@@ -67,10 +68,6 @@ Nivel1::Nivel1(Dificultad dificultadSeleccionada)
 
     patronActual  = 0;
     contadorPatron = 0;
-
-    // ---- Sonido de daño: inicializar aquí, no en iniciar() ----
-    sonidoDanio.setSource(QUrl("qrc:/dano.wav"));
-    sonidoDanio.setVolume(0.8f);
 }
 
 Nivel1::~Nivel1()
@@ -114,7 +111,9 @@ void Nivel1::iniciar()
     patronActual   = 0;
     contadorPatron = 0;
 
-    // NOTA: sonidoDanio ya fue configurado en el constructor, no se toca aquí
+    // Cargar sonido de daño
+    sonidoDanio.setSource(QUrl("qrc:/dano.wav"));
+    sonidoDanio.setVolume(0.8f);
 }
 
 //
@@ -167,7 +166,7 @@ void Nivel1::actualizar()
     if (!jefeFinalActivo)
         escalarDificultad(dt);
 
-    // ---- Colision con el jefe -> GANA ----
+    // ---- Colision con el jefe -> GANA (llego al jefe) ----
     if (jefeFinalActivo && colisionFinal())
     {
         llegoAlFinal   = true;
@@ -175,6 +174,8 @@ void Nivel1::actualizar()
         tiempoFinNivel = 0.0f;
         return;
     }
+
+    // El nivel 1 no tiene derrota por tiempo: termina al tocar el bloque naranja.
 }
 
 //
@@ -260,20 +261,22 @@ void Nivel1::generarObstaculo()
 
     // Pares de carriles bloqueados para cada patron
     const int bloqueados[3][2] = {
-        {1, 2},
-        {0, 2},
-        {0, 1}
+        {1, 2},  // patron 0 → libre el 0
+        {0, 2},  // patron 1 → libre el 1
+        {0, 1}   // patron 2 → libre el 2
     };
 
     contadorPatron++;
     if (contadorPatron >= 5)
     {
         contadorPatron = 0;
+        // Elige patron al azar pero diferente al actual para variar
         int nuevo;
         do { nuevo = rand() % 3; } while (nuevo == patronActual);
         patronActual = nuevo;
     }
 
+    // Spawn en los DOS carriles bloqueados → el tercero queda libre
     float yReal = -80.0f - scrollMundo;
     for (int i = 0; i < 2; ++i)
     {
@@ -289,6 +292,7 @@ void Nivel1::verificarColisiones()
     {
         if (o && o->estaActiva() && colision(jugador, o))
         {
+            // Sonido de daño
             sonidoDanio.play();
 
             choques++;
@@ -372,7 +376,8 @@ void Nivel1::activarJefeFinal()
     finalActivo            = true;
     jugadorBloqueadoCentro = true;
 
-    xRealFinal = 462.0f;
+    // Coloca el jefe en la parte superior central de la pantalla
+    xRealFinal = 462.0f;          // centrado en 1024 px (512 - 50)
     yRealFinal = JEFE_Y_INICIAL - scrollMundo;
 }
 
@@ -388,12 +393,14 @@ void Nivel1::dibujarTemporizador(QPainter& painter)
     float restante = tiempoTotalNivel - tiempoJuego;
     if (restante < 0.0f) restante = 0.0f;
 
+    // Rojo cuando quedan 10 s o menos
     painter.setPen(restante <= 10.0f ? QColor(255, 80, 80) : Qt::white);
     painter.setFont(QFont("Arial", 26, QFont::Bold));
 
     QString texto = QString::number((int)std::ceil(restante));
     painter.drawText(QRect(0, 20, 1024, 40), Qt::AlignCenter, texto);
 
+    // Aviso de colision reciente
     if (tiempoAlerta > 0.0f)
     {
         painter.setPen(Qt::yellow);
